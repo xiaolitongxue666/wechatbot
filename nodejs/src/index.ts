@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// @anthropic/wechatbot — WeChat iLink Bot SDK
+// @wechatbot/wechatbot — WeChat iLink Bot SDK
 //
 // A modular, extensible, production-grade SDK for building WeChat bots.
 //
@@ -9,7 +9,7 @@
 //                        Middleware Chain
 //
 // Quick start:
-//   import { WeChatBot } from '@anthropic/wechatbot'
+//   import { WeChatBot } from '@wechatbot/wechatbot'
 //
 //   const bot = new WeChatBot()
 //   await bot.login()

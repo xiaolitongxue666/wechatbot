@@ -3,7 +3,7 @@
  *
  * Scan a QR code in WeChat → chat with your Pi coding agent from your phone.
  *
- * Uses the @anthropic/wechatbot SDK for all WeChat iLink protocol operations.
+ * Uses the @wechatbot/wechatbot SDK for all WeChat iLink protocol operations.
  *
  * Architecture:
  *   ┌──────────────┐      ┌──────────────┐      ┌──────────┐
@@ -11,14 +11,14 @@
  *   │  (phone)     │      │  (Tencent)   │      │ (laptop) │
  *   └──────────────┘      └──────────────┘      └──────────┘
  *                                 ↑
- *                          @anthropic/wechatbot SDK
+ *                          @wechatbot/wechatbot SDK
  *
  * Install:
  *   pi -e /path/to/wechatbot/pi-agent/src/index.ts
  */
 
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent'
-import { WeChatBot, type IncomingMessage } from '@anthropic/wechatbot'
+import { WeChatBot, type IncomingMessage } from '@wechatbot/wechatbot'
 
 export default function wechatBridge(pi: ExtensionAPI) {
   let bot: WeChatBot | null = null

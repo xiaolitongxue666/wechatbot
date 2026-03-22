@@ -1,11 +1,11 @@
-# @anthropic/wechatbot — Node.js SDK
+# @wechatbot/wechatbot — Node.js SDK
 
 WeChat iLink Bot SDK for Node.js — modular, extensible, production-grade.
 
 ## Install
 
 ```bash
-npm install @anthropic/wechatbot
+npm install @wechatbot/wechatbot
 ```
 
 Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
@@ -13,7 +13,7 @@ Requires Node.js >= 22 (for native fetch). Zero runtime dependencies.
 ## Quick Start
 
 ```typescript
-import { WeChatBot } from '@anthropic/wechatbot'
+import { WeChatBot } from '@wechatbot/wechatbot'
 
 const bot = new WeChatBot()
 await bot.login()

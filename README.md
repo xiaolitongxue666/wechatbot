@@ -22,7 +22,7 @@ See [pi-agent/README.md](pi-agent/README.md) for full docs.
 
 | SDK | Install | Status |
 |---|---|---|
-| [Node.js](nodejs/) | `npm install @anthropic/wechatbot` | ✓ 42 files, 41 tests |
+| [Node.js](nodejs/) | `npm install @wechatbot/wechatbot` | ✓ 42 files, 41 tests |
 | [Go](golang/) | `go get github.com/anthropic/wechatbot-go` | ✓ |
 | [Rust](rust/) | `wechatbot = "0.1"` | ✓ |
 
@@ -31,7 +31,7 @@ See [pi-agent/README.md](pi-agent/README.md) for full docs.
 ### Node.js
 
 ```typescript
-import { WeChatBot } from '@anthropic/wechatbot'
+import { WeChatBot } from '@wechatbot/wechatbot'
 
 const bot = new WeChatBot()
 await bot.login()

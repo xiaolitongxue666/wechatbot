@@ -37,13 +37,13 @@ toc:
 1. 安装 SDK：
 
 ```bash
-npm install @anthropic/wechatbot
+npm install @wechatbot/wechatbot
 ```
 
 2. 创建你的机器人：
 
 ```typescript
-import { WeChatBot } from '@anthropic/wechatbot'
+import { WeChatBot } from '@wechatbot/wechatbot'
 
 const bot = new WeChatBot()
 await bot.login()
@@ -160,7 +160,7 @@ import {
   rateLimitMiddleware,
   typeFilterMiddleware,
   filterMiddleware,
-} from '@anthropic/wechatbot'
+} from '@wechatbot/wechatbot'
 
 const bot = new WeChatBot()
 
@@ -233,7 +233,7 @@ bot.onMessage(async (msg) => {
 向用户上传文件：
 
 ```typescript
-import { MediaType } from '@anthropic/wechatbot'
+import { MediaType } from '@wechatbot/wechatbot'
 
 const result = await bot.sendMedia(userId, {
   data: imageBuffer,
@@ -253,7 +253,7 @@ CDN 加密层自动处理两种密钥格式 —— `base64(原始 16 字节)` �
 所有 SDK 状态 —— 凭证、轮询游标、context token、typing ticket —— 都通过**可插拔存储接口**持久化。无需修改任何机器人代码即可切换后端。
 
 ```typescript
-import { WeChatBot, FileStorage, MemoryStorage } from '@anthropic/wechatbot'
+import { WeChatBot, FileStorage, MemoryStorage } from '@wechatbot/wechatbot'
 
 // 文件存储（默认）—— 重启后保留
 const bot1 = new WeChatBot({ storage: 'file' })

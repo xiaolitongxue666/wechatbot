@@ -134,7 +134,7 @@ WeChat user sends "帮我重构 auth 模块"
 pi-pi-agent/
 ├── src/
 │   └── index.ts      # Pi extension — commands, events, bridge logic
-│                      # Uses @anthropic/wechatbot SDK for all iLink operations
+│                      # Uses @wechatbot/wechatbot SDK for all iLink operations
 ├── package.json
 ├── tsconfig.json
 └── README.md
