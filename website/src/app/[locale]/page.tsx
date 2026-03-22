@@ -9,15 +9,10 @@ import { routing } from 'wechatbot-website/src/i18n/routing'
 import { EditorialPage } from 'wechatbot-website/src/components/markdown'
 import { mdxComponents } from 'wechatbot-website/src/components/mdx-components'
 
-interface TocItem {
-  label: string
-  href: string
-}
-
 interface ContentFrontmatter {
   title: string
   description: string
-  toc: TocItem[]
+  toc: Array<{ label: string; href: string }>
 }
 
 export function generateStaticParams() {
@@ -30,26 +25,11 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>
 }): Promise<Metadata> {
   const { locale } = await params
-
-  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
-    return {}
-  }
-
+  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) return {}
   const t = await getTranslations({ locale, namespace: 'metadata' })
-
   return {
     title: t('title'),
     description: t('description'),
-    openGraph: {
-      title: t('title'),
-      description: t('description'),
-      type: 'website',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: t('title'),
-      description: t('description'),
-    },
   }
 }
 
@@ -63,10 +43,7 @@ function loadContent(locale: string): { content: string; data: ContentFrontmatte
 
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-
-  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
-    notFound()
-  }
+  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) notFound()
 
   const result = loadContent(locale)
   if (!result) notFound()
@@ -74,7 +51,7 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
   const { content, data } = result
 
   return (
-    <EditorialPage toc={data.toc} logo='wechatbot' locale={locale}>
+    <EditorialPage toc={data.toc} logo='wechatbot' locale={locale} currentSlug={undefined}>
       <MDXRemote source={content} components={mdxComponents} options={{ blockJS: false }} />
     </EditorialPage>
   )

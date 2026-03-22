@@ -7,12 +7,17 @@ import 'prismjs/components/prism-tsx'
 import 'prismjs/components/prism-bash'
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-rust'
+import 'prismjs/components/prism-go'
+import 'prismjs/components/prism-toml'
 
 Prism.languages.diagram = {
   'box-drawing': /[┌┐└┘├┤┬┴┼─│═║╔╗╚╝╠╣╦╩╬╭╮╯╰┊┈╌┄╶╴╵╷]+/,
   'line-char': /[-_|<>]+/,
   'label': /[^\s┌┐└┘├┤┬┴┼─│═║╔╗╚╝╠╣╦╩╬╭╮╯╰┊┈╌┄╶╴╵╷\-_|<>]+/,
 }
+
+/* ── Active TOC tracking ──────────────────────────────────────────── */
 
 function useActiveTocId() {
   const [activeId, setActiveId] = useState('')
@@ -25,9 +30,7 @@ function useActiveTocId() {
       (entries) => {
         const visible: string[] = []
         entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.target.id) {
-            visible.push(entry.target.id)
-          }
+          if (entry.isIntersecting && entry.target.id) visible.push(entry.target.id)
         })
         if (visible.length > 0) {
           const sorted = visible.sort((a, b) => {
@@ -42,57 +45,100 @@ function useActiveTocId() {
       { rootMargin: '-80px 0px -75% 0px', threshold: 0 },
     )
 
-    headings.forEach((heading) => observer.observe(heading))
+    headings.forEach((h) => observer.observe(h))
     return () => observer.disconnect()
   }, [])
 
   return activeId
 }
 
-const LOCALE_NAMES: Record<string, string> = {
-  en: 'English',
-  zh: '中文',
-}
+/* ── Site-level page navigation ───────────────────────────────────── */
 
+const PAGE_NAV_EN: Array<{ slug?: string; label: string; icon: string }> = [
+  { slug: undefined, label: 'Overview', icon: '📦' },
+  { slug: 'nodejs', label: 'Node.js', icon: '🟢' },
+  { slug: 'golang', label: 'Go', icon: '🔵' },
+  { slug: 'rust', label: 'Rust', icon: '🦀' },
+  { slug: 'pi-agent', label: 'Pi Agent', icon: '🤖' },
+]
+
+const PAGE_NAV_ZH: Array<{ slug?: string; label: string; icon: string }> = [
+  { slug: undefined, label: '概览', icon: '📦' },
+  { slug: 'nodejs', label: 'Node.js', icon: '🟢' },
+  { slug: 'golang', label: 'Go', icon: '🔵' },
+  { slug: 'rust', label: 'Rust', icon: '🦀' },
+  { slug: 'pi-agent', label: 'Pi Agent', icon: '🤖' },
+]
+
+const LOCALE_NAMES: Record<string, string> = { en: 'English', zh: '中文' }
 const ALL_LOCALES = ['en', 'zh']
+
+/* ── TableOfContents (sidebar) ────────────────────────────────────── */
 
 export function TableOfContents({
   items,
   logo,
   locale,
+  currentSlug,
 }: {
   items: Array<{ label: string; href: string }>
   logo?: string
   locale?: string
+  currentSlug?: string
 }) {
   const activeId = useActiveTocId()
   const currentLocale = locale ?? 'en'
   const otherLocales = ALL_LOCALES.filter((l) => l !== currentLocale)
+  const pageNav = currentLocale === 'zh' ? PAGE_NAV_ZH : PAGE_NAV_EN
 
   return (
     <aside
       className='fixed top-[80px] hidden lg:block'
-      style={{ left: 'max(1rem, calc((100vw - 550px) / 2 - 200px))', width: '122px' }}
+      style={{ left: 'max(1rem, calc((100vw - 550px) / 2 - 220px))', width: '148px' }}
     >
       <nav>
+        {/* Site logo */}
         <a
           href={`/${currentLocale}`}
           className='no-underline transition-colors block'
           style={{
-            fontSize: '14px',
-            fontWeight: 700,
-            lineHeight: '20px',
-            letterSpacing: '-0.09px',
-            padding: '4px 0',
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-primary)',
-            marginBottom: '8px',
+            fontSize: '14px', fontWeight: 700, lineHeight: '20px', letterSpacing: '-0.09px',
+            padding: '4px 0', color: 'var(--text-primary)', fontFamily: 'var(--font-primary)',
+            marginBottom: '12px',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-hover)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-primary)' }}
         >
           {logo ?? 'index'}
         </a>
+
+        {/* Page navigation */}
+        {pageNav.map((page) => {
+          const isActive = page.slug === currentSlug
+          const href = page.slug ? `/${currentLocale}/${page.slug}` : `/${currentLocale}`
+          return (
+            <a
+              key={page.slug ?? 'home'}
+              href={href}
+              className='block no-underline'
+              style={{
+                fontSize: '12px', fontWeight: isActive ? 600 : 475, lineHeight: '16px',
+                letterSpacing: '-0.04px', padding: '4px 0',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontFamily: 'var(--font-primary)', transition: 'color 0.15s ease',
+              }}
+              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-hover)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+            >
+              {page.icon} {page.label}
+            </a>
+          )
+        })}
+
+        {/* Divider */}
+        <div style={{ height: '1px', background: 'var(--divider)', margin: '10px 0 8px' }} />
+
+        {/* Section TOC */}
         {items.map((item) => {
           const isActive = `#${activeId}` === item.href
           const defaultColor = isActive ? 'var(--text-primary)' : 'var(--text-secondary)'
@@ -102,13 +148,8 @@ export function TableOfContents({
               href={item.href}
               className='block no-underline'
               style={{
-                fontSize: '13px',
-                fontWeight: 475,
-                lineHeight: '15.6px',
-                letterSpacing: '-0.04px',
-                padding: '5px 0',
-                color: defaultColor,
-                fontFamily: 'var(--font-primary)',
+                fontSize: '11px', fontWeight: 475, lineHeight: '14px', letterSpacing: '-0.04px',
+                padding: '3px 0', color: defaultColor, fontFamily: 'var(--font-primary)',
                 transition: 'color 0.15s ease',
               }}
               onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-hover)' }}
@@ -118,20 +159,17 @@ export function TableOfContents({
             </a>
           )
         })}
-        <div style={{ marginTop: '8px', borderTop: '1px solid var(--divider)', paddingTop: '8px' }}>
+
+        {/* Locale switcher */}
+        <div style={{ marginTop: '10px', borderTop: '1px solid var(--divider)', paddingTop: '8px' }}>
           {otherLocales.map((l) => (
             <a
               key={l}
-              href={`/${l}`}
+              href={currentSlug ? `/${l}/${currentSlug}` : `/${l}`}
               className='block no-underline'
               style={{
-                fontSize: '12px',
-                fontWeight: 475,
-                lineHeight: '15.6px',
-                letterSpacing: '-0.04px',
-                padding: '3px 0',
-                color: 'var(--text-secondary)',
-                fontFamily: 'var(--font-primary)',
+                fontSize: '11px', fontWeight: 475, lineHeight: '14px', letterSpacing: '-0.04px',
+                padding: '3px 0', color: 'var(--text-secondary)', fontFamily: 'var(--font-primary)',
                 transition: 'color 0.15s ease',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-hover)' }}
@@ -146,27 +184,16 @@ export function TableOfContents({
   )
 }
 
+/* ── Typography ───────────────────────────────────────────────────── */
+
 export function SectionHeading({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <h1
-      id={id}
-      className='scroll-mt-[5.25rem]'
-      style={{
-        fontFamily: 'var(--font-primary)',
-        fontSize: '14px',
-        fontWeight: 560,
-        lineHeight: '20px',
-        letterSpacing: '-0.09px',
-        color: 'var(--text-primary)',
-        margin: 0,
-        padding: 0,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        paddingTop: '24px',
-        paddingBottom: '24px',
-      }}
-    >
+    <h1 id={id} className='scroll-mt-[5.25rem]' style={{
+      fontFamily: 'var(--font-primary)', fontSize: '14px', fontWeight: 560,
+      lineHeight: '20px', letterSpacing: '-0.09px', color: 'var(--text-primary)',
+      margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: '12px',
+      paddingTop: '24px', paddingBottom: '24px',
+    }}>
       <span style={{ whiteSpace: 'nowrap' }}>{children}</span>
       <span style={{ flex: 1, height: '1px', background: 'var(--divider)' }} />
     </h1>
@@ -175,56 +202,33 @@ export function SectionHeading({ id, children }: { id: string; children: React.R
 
 export function P({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <p
-      className={`editorial-prose ${className}`}
-      style={{
-        fontFamily: 'var(--font-primary)',
-        fontSize: '14px',
-        fontWeight: 475,
-        lineHeight: '22px',
-        letterSpacing: '-0.09px',
-        color: 'var(--text-primary)',
-        opacity: 0.82,
-        margin: 0,
-      }}
-    >
-      {children}
-    </p>
+    <p className={`editorial-prose ${className}`} style={{
+      fontFamily: 'var(--font-primary)', fontSize: '14px', fontWeight: 475,
+      lineHeight: '22px', letterSpacing: '-0.09px', color: 'var(--text-primary)',
+      opacity: 0.82, margin: 0,
+    }}>{children}</p>
   )
 }
 
 export function Caption({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      style={{
-        fontFamily: 'var(--font-primary)',
-        fontSize: '12px',
-        fontWeight: 475,
-        textAlign: 'center',
-        lineHeight: '20px',
-        letterSpacing: '-0.09px',
-        color: 'var(--text-secondary)',
-        margin: 0,
-      }}
-    >
-      {children}
-    </p>
+    <p style={{
+      fontFamily: 'var(--font-primary)', fontSize: '12px', fontWeight: 475,
+      textAlign: 'center', lineHeight: '20px', letterSpacing: '-0.09px',
+      color: 'var(--text-secondary)', margin: 0,
+    }}>{children}</p>
   )
 }
 
 export function A({ href, children }: { href: string; children: React.ReactNode }) {
   const isAnchor = href.startsWith('#')
   return (
-    <a
-      href={href}
-      target={isAnchor ? undefined : '_blank'}
+    <a href={href} target={isAnchor ? undefined : '_blank'}
       rel={isAnchor ? undefined : 'noopener noreferrer'}
       style={{ color: 'var(--link-accent, #0969da)', fontWeight: 600, textDecoration: 'none' }}
       onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
       onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
-    >
-      {children}
-    </a>
+    >{children}</a>
   )
 }
 
@@ -233,49 +237,26 @@ export function Code({ children }: { children: React.ReactNode }) {
 }
 
 export function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-  return (
-    <>
-      <SectionHeading id={id}>{title}</SectionHeading>
-      {children}
-    </>
-  )
+  return (<><SectionHeading id={id}>{title}</SectionHeading>{children}</>)
 }
 
 export function OL({ children }: { children: React.ReactNode }) {
   return (
-    <ol
-      className='m-0 pl-5'
-      style={{
-        fontFamily: 'var(--font-primary)',
-        fontSize: '14px',
-        fontWeight: 475,
-        lineHeight: '20px',
-        letterSpacing: '-0.09px',
-        color: 'var(--text-primary)',
-        listStyleType: 'decimal',
-      }}
-    >
-      {children}
-    </ol>
+    <ol className='m-0 pl-5' style={{
+      fontFamily: 'var(--font-primary)', fontSize: '14px', fontWeight: 475,
+      lineHeight: '20px', letterSpacing: '-0.09px', color: 'var(--text-primary)',
+      listStyleType: 'decimal',
+    }}>{children}</ol>
   )
 }
 
 export function List({ children }: { children: React.ReactNode }) {
   return (
-    <ul
-      className='m-0 pl-5'
-      style={{
-        fontFamily: 'var(--font-primary)',
-        fontSize: '14px',
-        fontWeight: 475,
-        lineHeight: '20px',
-        letterSpacing: '-0.09px',
-        color: 'var(--text-primary)',
-        listStyleType: 'disc',
-      }}
-    >
-      {children}
-    </ul>
+    <ul className='m-0 pl-5' style={{
+      fontFamily: 'var(--font-primary)', fontSize: '14px', fontWeight: 475,
+      lineHeight: '20px', letterSpacing: '-0.09px', color: 'var(--text-primary)',
+      listStyleType: 'disc',
+    }}>{children}</ul>
   )
 }
 
@@ -283,68 +264,40 @@ export function Li({ children }: { children: React.ReactNode }) {
   return <li style={{ padding: '0 0 8px 12px' }}>{children}</li>
 }
 
+/* ── CodeBlock ────────────────────────────────────────────────────── */
+
 export function CodeBlock({
-  children,
-  lang = 'jsx',
-  lineHeight = '1.85',
-  showLineNumbers = true,
+  children, lang = 'jsx', lineHeight = '1.85', showLineNumbers = true,
 }: {
-  children: string
-  lang?: string
-  lineHeight?: string
-  showLineNumbers?: boolean
+  children: string; lang?: string; lineHeight?: string; showLineNumbers?: boolean
 }) {
   const codeRef = useRef<HTMLElement>(null)
   const content = typeof children === 'string' ? children : String(children)
   const lines = content.split('\n')
 
   useEffect(() => {
-    if (codeRef.current && lang) {
-      Prism.highlightElement(codeRef.current)
-    }
+    if (codeRef.current && lang) Prism.highlightElement(codeRef.current)
   }, [content, lang])
 
   return (
     <figure className='m-0 bleed'>
       <div className='relative'>
         <pre className='overflow-x-auto' style={{ borderRadius: '8px', margin: 0, padding: 0 }}>
-          <div
-            className='flex'
-            style={{
-              padding: '12px 8px 8px',
-              fontFamily: 'var(--font-code)',
-              fontSize: '12px',
-              fontWeight: 400,
-              lineHeight,
-              letterSpacing: 'normal',
-              color: 'var(--text-primary)',
-              tabSize: 2,
-            }}
-          >
+          <div className='flex' style={{
+            padding: '12px 8px 8px', fontFamily: 'var(--font-code)', fontSize: '12px',
+            fontWeight: 400, lineHeight, letterSpacing: 'normal', color: 'var(--text-primary)', tabSize: 2,
+          }}>
             {showLineNumbers && (
-              <span
-                className='select-none shrink-0'
-                aria-hidden='true'
-                style={{
-                  color: 'var(--code-line-nr)',
-                  textAlign: 'right',
-                  paddingRight: '20px',
-                  width: '36px',
-                  userSelect: 'none',
-                }}
-              >
-                {lines.map((_, i) => (
-                  <span key={i} className='block'>{i + 1}</span>
-                ))}
+              <span className='select-none shrink-0' aria-hidden='true' style={{
+                color: 'var(--code-line-nr)', textAlign: 'right', paddingRight: '20px',
+                width: '36px', userSelect: 'none',
+              }}>
+                {lines.map((_, i) => <span key={i} className='block'>{i + 1}</span>)}
               </span>
             )}
-            <code
-              ref={codeRef}
-              className={lang ? `language-${lang}` : undefined}
+            <code ref={codeRef} className={lang ? `language-${lang}` : undefined}
               style={{ whiteSpace: 'pre', background: 'none', padding: 0, lineHeight }}
-            >
-              {content}
-            </code>
+            >{content}</code>
           </div>
         </pre>
       </div>
@@ -352,91 +305,97 @@ export function CodeBlock({
   )
 }
 
+/* ── ComparisonTable ──────────────────────────────────────────────── */
+
 export function ComparisonTable({
-  title,
-  headers,
-  rows,
+  title, headers, rows,
 }: {
-  title?: string
-  headers: [string, string, string]
-  rows: Array<[string, string, string]>
+  title?: string; headers: [string, string, string]; rows: Array<[string, string, string]>
 }) {
   if (!headers || !rows) return null
+  const cellStyle = {
+    padding: '4.8px 12px 4.8px 0', fontSize: '11px', fontWeight: 500,
+    fontFamily: 'var(--font-code)', color: 'var(--text-primary)',
+    borderBottom: '1px solid var(--page-border)',
+  }
   return (
     <div className='w-full max-w-full overflow-x-auto' style={{ padding: '8px 0' }}>
-      {title && (
-        <div
-          style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '11px',
-            fontWeight: 400,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.02em',
-            padding: '0 0 6px',
-          }}
-        >
-          {title}
-        </div>
-      )}
+      {title && <div style={{
+        fontFamily: 'var(--font-primary)', fontSize: '11px', fontWeight: 400,
+        color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em', padding: '0 0 6px',
+      }}>{title}</div>}
       <table className='w-full' style={{ borderSpacing: 0, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            {headers.map((header) => (
-              <th
-                key={header}
-                className='text-left'
-                style={{
-                  padding: '4.8px 12px 4.8px 0',
-                  fontSize: '11px',
-                  fontWeight: 400,
-                  fontFamily: 'var(--font-primary)',
-                  color: 'var(--text-muted)',
-                  borderBottom: '1px solid var(--page-border)',
-                }}
-              >
-                {header}
-              </th>
-            ))}
+        <thead><tr>{headers.map((h) => (
+          <th key={h} className='text-left' style={{
+            ...cellStyle, fontWeight: 400, fontFamily: 'var(--font-primary)', color: 'var(--text-muted)',
+          }}>{h}</th>
+        ))}</tr></thead>
+        <tbody>{rows.map(([f, t, u]) => (
+          <tr key={f}>
+            <td style={{ ...cellStyle, whiteSpace: 'nowrap' } as React.CSSProperties}>{f}</td>
+            <td style={{ ...cellStyle, whiteSpace: 'nowrap' } as React.CSSProperties}>{t}</td>
+            <td style={cellStyle as React.CSSProperties}>{u}</td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map(([feature, them, us]) => (
-            <tr key={feature}>
-              <td style={{ padding: '4.8px 12px 4.8px 0', fontSize: '11px', fontWeight: 500, fontFamily: 'var(--font-code)', color: 'var(--text-primary)', borderBottom: '1px solid var(--page-border)', whiteSpace: 'nowrap' }}>{feature}</td>
-              <td style={{ padding: '4.8px 12px 4.8px 0', fontSize: '11px', fontWeight: 500, fontFamily: 'var(--font-code)', color: 'var(--text-primary)', borderBottom: '1px solid var(--page-border)', whiteSpace: 'nowrap' }}>{them}</td>
-              <td style={{ padding: '4.8px 12px 4.8px 0', fontSize: '11px', fontWeight: 500, fontFamily: 'var(--font-code)', color: 'var(--text-primary)', borderBottom: '1px solid var(--page-border)' }}>{us}</td>
-            </tr>
-          ))}
-        </tbody>
+        ))}</tbody>
       </table>
     </div>
   )
 }
 
-export function EditorialPage({
-  toc,
-  logo,
-  locale,
-  children,
-}: {
-  toc: Array<{ label: string; href: string }>
-  logo?: string
-  locale?: string
-  children: React.ReactNode
+/* ── NavCard (for homepage) ───────────────────────────────────────── */
+
+export function NavCard({ href, icon, title, description }: {
+  href: string; icon: string; title: string; description: string
 }) {
   return (
-    <div
-      className='editorial-page relative min-h-screen overflow-x-hidden'
-      style={{
-        background: 'var(--bg)',
-        color: 'var(--text-primary)',
-        fontFamily: 'var(--font-primary)',
-        WebkitFontSmoothing: 'antialiased',
-        textRendering: 'optimizeLegibility',
+    <a href={href} className='block no-underline' style={{
+      border: '1px solid var(--page-border)', borderRadius: '8px', padding: '16px 20px',
+      transition: 'border-color 0.15s ease, background 0.15s ease',
+    }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--text-secondary)'
+        e.currentTarget.style.background = 'var(--code-bg)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--page-border)'
+        e.currentTarget.style.background = 'transparent'
       }}
     >
-      <TableOfContents items={toc} logo={logo} locale={locale} />
+      <div style={{ fontSize: '20px', marginBottom: '8px' }}>{icon}</div>
+      <div style={{
+        fontFamily: 'var(--font-primary)', fontSize: '14px', fontWeight: 600,
+        color: 'var(--text-primary)', marginBottom: '4px',
+      }}>{title}</div>
+      <div style={{
+        fontFamily: 'var(--font-primary)', fontSize: '12px', fontWeight: 475,
+        color: 'var(--text-secondary)', lineHeight: '18px',
+      }}>{description}</div>
+    </a>
+  )
+}
+
+export function NavGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', padding: '4px 0',
+    }}>{children}</div>
+  )
+}
+
+/* ── EditorialPage ────────────────────────────────────────────────── */
+
+export function EditorialPage({
+  toc, logo, locale, currentSlug, children,
+}: {
+  toc: Array<{ label: string; href: string }>; logo?: string
+  locale?: string; currentSlug?: string; children: React.ReactNode
+}) {
+  return (
+    <div className='editorial-page relative min-h-screen overflow-x-hidden' style={{
+      background: 'var(--bg)', color: 'var(--text-primary)', fontFamily: 'var(--font-primary)',
+      WebkitFontSmoothing: 'antialiased', textRendering: 'optimizeLegibility',
+    }}>
+      <TableOfContents items={toc} logo={logo} locale={locale} currentSlug={currentSlug} />
       <div className='mx-auto' style={{ width: '550px', maxWidth: 'calc(100% - 2rem)', padding: '0 1rem 6rem' }}>
         <div style={{ height: '80px' }} />
         <article className='editorial-article flex flex-col gap-[32px]'>{children}</article>
