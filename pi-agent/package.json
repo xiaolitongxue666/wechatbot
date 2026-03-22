@@ -1,13 +1,18 @@
 {
   "name": "@wechatbot/pi-agent",
   "version": "0.1.0",
-  "description": "Pi extension — scan WeChat QR code, chat with Pi agent from your phone",
+  "description": "Pi extension — type /wechat, scan QR code, chat with Pi from WeChat",
   "type": "module",
+  "keywords": ["pi-package"],
   "pi": {
     "extensions": ["./src/index.ts"]
   },
   "dependencies": {
-    "@wechatbot/wechatbot": "file:../nodejs"
+    "@wechatbot/wechatbot": "^2.0.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",

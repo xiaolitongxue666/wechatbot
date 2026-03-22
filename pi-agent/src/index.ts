@@ -1,17 +1,12 @@
 /**
  * Pi Extension: WeChat Bridge
  *
- * Scan a QR code in WeChat → chat with your Pi coding agent from your phone.
+ * Type /wechat or /weixin in pi → QR code appears in terminal →
+ * scan with WeChat → your WeChat messages become pi prompts →
+ * pi responses sent back to WeChat.
  *
- * Uses the @wechatbot/wechatbot SDK for all WeChat iLink protocol operations.
- *
- * Architecture:
- *   ┌──────────────┐      ┌──────────────┐      ┌──────────┐
- *   │  WeChat User │ ←──→ │  iLink API   │ ←──→ │ Pi Agent │
- *   │  (phone)     │      │  (Tencent)   │      │ (laptop) │
- *   └──────────────┘      └──────────────┘      └──────────┘
- *                                 ↑
- *                          @wechatbot/wechatbot SDK
+ * Uses @wechatbot/wechatbot SDK for iLink protocol.
+ * Uses qrcode-terminal for QR display.
  *
  * Install:
  *   pi -e /path/to/wechatbot/pi-agent/src/index.ts
@@ -19,18 +14,18 @@
 
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent'
 import { WeChatBot, type IncomingMessage } from '@wechatbot/wechatbot'
+import qrTerminal from 'qrcode-terminal'
 
 export default function wechatBridge(pi: ExtensionAPI) {
   let bot: WeChatBot | null = null
   let connected = false
   let activeUserId: string | null = null
   let pendingReply: IncomingMessage | null = null
-
-  // ── Collect assistant response for WeChat reply ───────────────────
   let assistantText = ''
   let isStreaming = false
 
-  // When agent finishes → send accumulated reply to WeChat
+  // ── Capture pi response → send back to WeChat ────────────────────
+
   pi.on('agent_end', async (event, ctx) => {
     if (!bot || !connected || !pendingReply) return
 
@@ -38,7 +33,7 @@ export default function wechatBridge(pi: ExtensionAPI) {
     pendingReply = null
     isStreaming = false
 
-    // Extract the assistant's last message text
+    // Extract assistant's final text
     const messages = event.messages ?? []
     let finalText = ''
     for (const msg of messages) {
@@ -48,208 +43,185 @@ export default function wechatBridge(pi: ExtensionAPI) {
         }
       }
     }
-
-    if (!finalText.trim()) {
-      finalText = assistantText || '[No response from agent]'
-    }
+    if (!finalText.trim()) finalText = assistantText || '[No response]'
 
     try {
       await bot.stopTyping(reply.userId)
       await bot.reply(reply, finalText)
-      ctx.ui.setStatus('wechat', `✓ Replied to WeChat user`)
+      ctx.ui.setStatus('wechat', `✓ Replied to WeChat`)
     } catch (e) {
       ctx.ui.setStatus('wechat', `✗ Reply failed: ${e instanceof Error ? e.message : e}`)
     }
-
     assistantText = ''
   })
 
-  // Track streaming text
   pi.on('message_update', async (event) => {
     if (!isStreaming) return
-    const msg = event.message
-    if (msg.role === 'assistant') {
+    if (event.message.role === 'assistant') {
       let text = ''
-      for (const block of msg.content) {
+      for (const block of event.message.content) {
         if (block.type === 'text') text += block.text
       }
       assistantText = text
     }
   })
 
-  // ── /wechat command — start the bridge ────────────────────────────
+  // ── /wechat and /weixin commands ──────────────────────────────────
 
-  pi.registerCommand('wechat', {
-    description: 'Connect WeChat — scan QR code to chat with Pi from your phone',
-    handler: async (args, ctx) => {
-      // Already connected? Show menu.
-      if (connected && bot) {
-        const action = await ctx.ui.select('WeChat is already connected', [
-          'Disconnect',
-          'Show status',
-          'Cancel',
-        ])
-        if (action === 'Disconnect') {
-          bot.stop()
-          connected = false
-          ctx.ui.setStatus('wechat', undefined)
-          ctx.ui.notify('WeChat disconnected', 'info')
-        } else if (action === 'Show status') {
-          const creds = bot.getCredentials()
-          ctx.ui.notify(
-            `Connected as ${creds?.accountId ?? 'unknown'}\nUser: ${creds?.userId ?? 'unknown'}`,
-            'info',
-          )
-        }
-        return
+  const startWechat = async (args: string | undefined, ctx: any) => {
+    // Already connected?
+    if (connected && bot) {
+      const action = await ctx.ui.select('WeChat is connected', [
+        'Disconnect',
+        'Status',
+        'Cancel',
+      ])
+      if (action === 'Disconnect') {
+        bot.stop()
+        connected = false
+        ctx.ui.setStatus('wechat', undefined)
+        ctx.ui.notify('WeChat disconnected', 'info')
+      } else if (action === 'Status') {
+        const creds = bot.getCredentials()
+        ctx.ui.notify(`Account: ${creds?.accountId}\nUser: ${creds?.userId}`, 'info')
       }
+      return
+    }
 
-      // ── Create a new WeChatBot instance using our SDK ──────────────
-      bot = new WeChatBot({
-        storage: 'file',      // Persist credentials to ~/.wechatbot/
-        logLevel: 'warn',     // Quiet — we show status via pi TUI instead
+    // Create bot via SDK
+    bot = new WeChatBot({ storage: 'file', logLevel: 'warn' })
+    const forceLogin = args?.trim() === '--force'
+
+    ctx.ui.notify('Starting WeChat login…', 'info')
+    ctx.ui.setStatus('wechat', '⏳ Waiting for QR scan…')
+
+    try {
+      const creds = await bot.login({
+        force: forceLogin,
+        callbacks: {
+          // ★ Render QR code in terminal using qrcode-terminal
+          onQrUrl: (url) => {
+            qrTerminal.generate(url, { small: true }, (qr: string) => {
+              // Show QR in pi TUI widget
+              const lines = [
+                '📱 Scan this QR code in WeChat:',
+                '',
+                ...qr.split('\n'),
+                '',
+                `URL: ${url}`,
+              ]
+              ctx.ui.setWidget('wechat-qr', lines)
+            })
+          },
+          onScanned: () => {
+            ctx.ui.setStatus('wechat', '📱 Scanned — confirm in WeChat…')
+          },
+          onExpired: () => {
+            ctx.ui.setStatus('wechat', '⏳ QR expired — new one coming…')
+          },
+        },
       })
 
-      const forceLogin = args?.trim() === '--force'
+      // Login success — clear QR widget
+      ctx.ui.setWidget('wechat-qr', undefined)
+      ctx.ui.setStatus('wechat', `✓ WeChat: ${creds.accountId}`)
+      ctx.ui.notify(`WeChat connected!\nAccount: ${creds.accountId}`, 'info')
+      connected = true
 
-      ctx.ui.notify('Starting WeChat login...', 'info')
-      ctx.ui.setStatus('wechat', '⏳ Waiting for QR scan...')
+      // ── WeChat messages → pi prompts ─────────────────────────────
+      bot.onMessage(async (msg: IncomingMessage) => {
+        if (msg.type !== 'text' || !msg.text.trim()) {
+          await bot!.reply(msg, `[${msg.type} received — text only for now]`)
+          return
+        }
 
-      try {
-        // ── Login using the SDK ──────────────────────────────────────
-        const creds = await bot.login({
-          force: forceLogin,
-          callbacks: {
-            onQrUrl: (url) => {
-              // Show the QR URL in pi TUI widget
-              ctx.ui.setWidget('wechat-qr', [
-                '╔══════════════════════════════════════════╗',
-                '║    📱 Scan this QR code in WeChat        ║',
-                '╚══════════════════════════════════════════╝',
-                '',
-                url,
-                '',
-                'Open this URL in WeChat to login.',
-                'Or scan the QR code from the URL page.',
-              ])
-            },
-            onScanned: () => {
-              ctx.ui.setStatus('wechat', '📱 QR scanned — confirm in WeChat...')
-            },
-            onExpired: () => {
-              ctx.ui.setStatus('wechat', '⏳ QR expired — requesting new one...')
-            },
-          },
-        })
+        activeUserId = msg.userId
+        pendingReply = msg
+        isStreaming = true
+        assistantText = ''
 
-        // Clear QR widget after successful login
-        ctx.ui.setWidget('wechat-qr', undefined)
-        ctx.ui.setStatus('wechat', `✓ WeChat: ${creds.accountId}`)
-        ctx.ui.notify(`WeChat connected! Account: ${creds.accountId}`, 'info')
-        connected = true
+        try { await bot!.sendTyping(msg.userId) } catch {}
 
-        // ── Register message handler ─────────────────────────────────
-        // WeChat messages → pi prompts (via SDK's onMessage)
-        bot.onMessage(async (msg: IncomingMessage) => {
-          if (msg.type !== 'text' || !msg.text.trim()) {
-            await bot!.reply(msg, `[Received ${msg.type} — only text messages are supported currently]`)
-            return
-          }
+        ctx.ui.setStatus('wechat', `📱 ${msg.text.slice(0, 60)}`)
 
-          activeUserId = msg.userId
-          pendingReply = msg
-          isStreaming = true
-          assistantText = ''
+        // ★ Core: WeChat message → pi prompt
+        pi.sendUserMessage(msg.text)
+      })
 
-          // Show typing indicator in WeChat (SDK handles getconfig + sendtyping)
-          try { await bot!.sendTyping(msg.userId) } catch { /* non-fatal */ }
+      // SDK events → pi TUI status
+      bot.on('error', (err) => {
+        ctx.ui.setStatus('wechat', `⚠ ${err instanceof Error ? err.message : String(err)}`)
+      })
+      bot.on('session:expired', () => {
+        ctx.ui.setStatus('wechat', '⚠ Session expired — re-login…')
+      })
+      bot.on('session:restored', (c) => {
+        ctx.ui.setStatus('wechat', `✓ Reconnected: ${c.accountId}`)
+      })
 
-          // Show in pi TUI footer
-          ctx.ui.setStatus('wechat', `📱 ${msg.userId.slice(0, 20)}…: ${msg.text.slice(0, 50)}`)
+      // Start long-poll (background)
+      bot.start().catch((e) => {
+        ctx.ui.setStatus('wechat', `✗ Poll error: ${e instanceof Error ? e.message : e}`)
+        connected = false
+      })
 
-          // ★ Core bridge: inject WeChat message as a pi prompt
-          pi.sendUserMessage(msg.text)
-        })
+    } catch (e) {
+      ctx.ui.setWidget('wechat-qr', undefined)
+      ctx.ui.setStatus('wechat', undefined)
+      ctx.ui.notify(`Login failed: ${e instanceof Error ? e.message : e}`, 'error')
+      bot = null
+    }
+  }
 
-        // ── SDK error handling ────────────────────────────────────────
-        bot.on('error', (err) => {
-          ctx.ui.setStatus('wechat', `⚠ ${err instanceof Error ? err.message : String(err)}`)
-        })
-
-        bot.on('session:expired', () => {
-          ctx.ui.setStatus('wechat', '⚠ WeChat session expired — re-login...')
-        })
-
-        bot.on('session:restored', (newCreds) => {
-          ctx.ui.setStatus('wechat', `✓ WeChat reconnected: ${newCreds.accountId}`)
-        })
-
-        // ── Start the SDK's long-poll loop (runs in background) ──────
-        bot.start().catch((e) => {
-          ctx.ui.setStatus('wechat', `✗ WeChat poll error: ${e instanceof Error ? e.message : e}`)
-          connected = false
-        })
-
-      } catch (e) {
-        ctx.ui.setWidget('wechat-qr', undefined)
-        ctx.ui.setStatus('wechat', undefined)
-        ctx.ui.notify(`WeChat login failed: ${e instanceof Error ? e.message : e}`, 'error')
-        bot = null
-      }
-    },
+  // Register both /wechat and /weixin
+  pi.registerCommand('wechat', {
+    description: 'Connect WeChat — scan QR to chat with Pi from your phone',
+    handler: startWechat,
   })
 
-  // ── /wechat-disconnect ────────────────────────────────────────────
+  pi.registerCommand('weixin', {
+    description: 'Connect WeChat (alias for /wechat)',
+    handler: startWechat,
+  })
 
   pi.registerCommand('wechat-disconnect', {
-    description: 'Disconnect WeChat bridge',
+    description: 'Disconnect WeChat',
     handler: async (_args, ctx) => {
       if (bot) { bot.stop(); bot = null }
-      connected = false
-      activeUserId = null
-      pendingReply = null
+      connected = false; activeUserId = null; pendingReply = null
       ctx.ui.setStatus('wechat', undefined)
       ctx.ui.setWidget('wechat-qr', undefined)
       ctx.ui.notify('WeChat disconnected', 'info')
     },
   })
 
-  // ── /wechat-send — manual send ────────────────────────────────────
-
   pi.registerCommand('wechat-send', {
-    description: 'Send a message to the connected WeChat user',
+    description: 'Send text to WeChat user: /wechat-send <message>',
     handler: async (args, ctx) => {
       if (!bot || !connected || !activeUserId) {
-        ctx.ui.notify('No WeChat user connected. Run /wechat first.', 'error')
+        ctx.ui.notify('Not connected. Run /wechat first.', 'error')
         return
       }
       const text = args?.trim()
-      if (!text) {
-        ctx.ui.notify('Usage: /wechat-send <message>', 'error')
-        return
-      }
+      if (!text) { ctx.ui.notify('Usage: /wechat-send <message>', 'error'); return }
       try {
         await bot.send(activeUserId, text)
-        ctx.ui.notify(`Sent to WeChat: ${text.slice(0, 50)}…`, 'info')
+        ctx.ui.notify(`Sent: ${text.slice(0, 50)}…`, 'info')
       } catch (e) {
-        ctx.ui.notify(`Send failed: ${e instanceof Error ? e.message : e}`, 'error')
+        ctx.ui.notify(`Failed: ${e instanceof Error ? e.message : e}`, 'error')
       }
     },
   })
 
-  // ── Cleanup on shutdown ───────────────────────────────────────────
-
+  // Cleanup
   pi.on('session_shutdown', async () => {
     if (bot) { bot.stop(); bot = null }
     connected = false
   })
 
-  // ── Restore status on session start ───────────────────────────────
-
   pi.on('session_start', async (_event, ctx) => {
     if (connected && bot) {
-      const creds = bot.getCredentials()
-      ctx.ui.setStatus('wechat', `✓ WeChat: ${creds?.accountId ?? 'connected'}`)
+      ctx.ui.setStatus('wechat', `✓ WeChat: ${bot.getCredentials()?.accountId ?? 'connected'}`)
     }
   })
 }

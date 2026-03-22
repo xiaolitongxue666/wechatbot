@@ -1,141 +1,114 @@
-# wechatbot-pi-agent — Pi Extension for WeChat
+# @wechatbot/pi-agent
 
-A **pi extension** that bridges WeChat to your Pi coding agent.
-Scan a QR code in WeChat → chat with Pi from your phone.
-
-## How It Works
-
-```
-┌──────────────┐      ┌──────────────┐      ┌──────────┐
-│  WeChat User │ ←──→ │  iLink API   │ ←──→ │ Pi Agent │
-│  (phone)     │      │  (Tencent)   │      │ (laptop) │
-└──────────────┘      └──────────────┘      └──────────┘
-                                                  ↑
-                                           This extension
-```
-
-1. You run `/wechat` in pi
-2. Extension calls WeChat iLink API → gets a QR code URL
-3. Pi TUI displays the QR code link
-4. You scan it in WeChat on your phone
-5. Login completes → credentials saved to `~/.wechatbot/`
-6. **WeChat messages → pi prompts** (via `pi.sendUserMessage()`)
-7. **Pi responses → WeChat replies** (via `agent_end` event)
-8. Typing indicator shown in WeChat while Pi thinks
+Pi extension — type `/wechat` in pi, scan QR code in terminal, chat with Pi from WeChat.
 
 ## Install
 
-### Option 1: Load directly
+### From npm (recommended)
 
 ```bash
-pi -e /path/to/wechatbot/pi-agent/src/index.ts
+pi install npm:@wechatbot/pi-agent
 ```
 
-### Option 2: Copy to extensions directory
+Done. The extension auto-loads on next `pi` session. Type `/wechat` to start.
+
+### From git
 
 ```bash
-# Global
-cp -r pi-agent/ ~/.pi/agent/extensions/wechat-bridge/
-
-# Or project-local
-cp -r pi-agent/ .pi/extensions/wechat-bridge/
+pi install https://github.com/jiweiyuan/wechatbot
 ```
 
-Then it auto-loads on every `pi` session.
+### Quick test (no install)
+
+```bash
+pi -e npm:@wechatbot/pi-agent
+```
+
+### Manual (local development)
+
+```bash
+git clone https://github.com/jiweiyuan/wechatbot
+cd wechatbot/pi-agent && npm install
+
+# Load directly
+pi -e ./src/index.ts
+
+# Or copy to auto-discovery directory
+cp -r . ~/.pi/agent/extensions/wechat/
+```
 
 ## Usage
 
 ```
-/wechat              # Start WeChat login (shows QR code)
-/wechat --force      # Force re-login (new QR code)
-/wechat-disconnect   # Disconnect WeChat
-/wechat-send <text>  # Manually send text to WeChat user
+/wechat              Scan QR code → connect WeChat to this pi session
+/weixin              Alias for /wechat
+/wechat --force      Force re-login (new QR code)
+/wechat-disconnect   Disconnect
+/wechat-send <text>  Send text to WeChat user manually
 ```
 
-### Typical flow:
+### What happens
 
 ```
 > /wechat
 
-  ╔══════════════════════════════════════════╗
-  ║    📱 Scan this QR code in WeChat        ║
-  ╚══════════════════════════════════════════╝
+  📱 Scan this QR code in WeChat:
 
-  https://weixin.qq.com/x/cAbCdEfGhIj
+    ▄▄▄▄▄▄▄ ▄▄▄ ▄▄▄▄▄▄▄
+    █ ▄▄▄ █ █▀█ █ ▄▄▄ █
+    █ ███ █ ▄▀▄ █ ███ █
+    █▄▄▄▄▄█ █ ▄ █▄▄▄▄▄█
+    ▄▄▄▄▄ ▄▄▄█▄▄▄ ▄▄▄▄▄
+    █▄█▀█▄▄ ▀▀▄▀▀█▄▀█▀▄
+    ▄▄▄▄▄▄▄ ▀▄ █▀▄█▄█▀▄
+    █▄▄▄▄▄█ █▀▄█▀▀█▀███
 
-  Open this URL in WeChat to login.
+  [wechat] ✓ Connected: e06c1ceea05e@im.bot
 
-[wechat] QR scanned — confirm in WeChat
-[wechat] Login confirmed
-✓ WeChat connected! Account: e06c1ceea05e@im.bot
-
-# Now send "帮我看看这个项目的架构" from WeChat...
-# Pi receives it as a prompt, processes it, sends the reply back to WeChat.
+# Now send "帮我看看这个bug" from WeChat...
+# Pi processes it, sends reply back to WeChat.
+# "对方正在输入中..." shown while Pi thinks.
 ```
 
-## Architecture (Pi Extension APIs Used)
-
-| API | Purpose |
-|-----|---------|
-| `pi.registerCommand('wechat', ...)` | `/wechat` command to start login |
-| `pi.sendUserMessage(text)` | Inject WeChat message as a pi prompt |
-| `pi.on('agent_end', ...)` | Capture pi's final response → send to WeChat |
-| `pi.on('message_update', ...)` | Track streaming text for reply assembly |
-| `ctx.ui.setWidget(...)` | Show QR code URL in pi TUI |
-| `ctx.ui.setStatus(...)` | Show connection status in footer |
-| `ctx.ui.notify(...)` | Show notifications |
-| `pi.on('session_shutdown', ...)` | Cleanup on exit |
-
-## Message Flow
+## How It Works
 
 ```
-WeChat user sends "帮我重构 auth 模块"
-         │
-         ▼
-  iLink API (long-poll getupdates)
-         │
-         ▼
-  Extension receives IncomingMessage
-         │
-         ├── wechat.sendTyping(userId)     → "对方正在输入中..."
-         │
-         ├── pi.sendUserMessage(msg.text)  → becomes pi prompt
-         │
-         ▼
-  Pi agent processes (tools, thinking, etc.)
-         │
-         ▼
-  pi.on('agent_end') fires
-         │
-         ├── Extract assistant text from messages
-         ├── wechat.stopTyping(userId)
-         └── wechat.reply(msg, text)       → sent back to WeChat
+WeChat User (phone)
+    │
+    ▼
+iLink API (Tencent) ←── @wechatbot/wechatbot SDK
+    │
+    ▼
+Pi Extension
+    │
+    ├── WeChat msg → pi.sendUserMessage(text)  → pi processes as prompt
+    │
+    └── pi.on('agent_end') → bot.reply(text)   → sent back to WeChat
 ```
 
-## Features
+1. `/wechat` creates a `WeChatBot` instance (SDK)
+2. SDK calls iLink API → gets QR URL
+3. `qrcode-terminal` renders QR code in pi TUI via `ctx.ui.setWidget()`
+4. User scans QR in WeChat → login confirmed → credentials saved
+5. SDK starts long-poll → incoming WeChat messages trigger `pi.sendUserMessage()`
+6. When pi finishes (`agent_end` event), response is sent back via `bot.reply()`
+7. `bot.sendTyping()` shows "对方正在输入中..." while pi thinks
 
-- **Zero config** — just `/wechat` and scan
-- **Credential persistence** — `~/.wechatbot/credentials.json`, skips QR on restart
-- **Session recovery** — auto re-login on `-14` (session expired)
-- **Typing indicator** — shows "对方正在输入中" while Pi thinks
-- **Text chunking** — long replies split at 2000 chars
-- **Graceful shutdown** — stops WeChat poll on `session_shutdown`
+## QR Code Display
 
-## Limitations
+The QR code is rendered using `qrcode-terminal` — a real scannable QR code in the terminal.
 
-- Text messages only (images/voice/files acknowledged but not processed)
-- Single user at a time (last message sender is the active user)
-- QR code displayed as URL (not rendered as actual QR in terminal)
-- Pi must be running in interactive mode (not print mode)
+The **SDK does NOT render QR codes** — that is the developer's responsibility.
+This extension is the developer. It receives the URL via `onQrUrl` callback and renders it.
 
-## Files
+## Dependencies
 
-```
-pi-pi-agent/
-├── src/
-│   └── index.ts      # Pi extension — commands, events, bridge logic
-│                      # Uses @wechatbot/wechatbot SDK for all iLink operations
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+| Package | Purpose |
+|---|---|
+| `@wechatbot/wechatbot` | WeChat iLink Bot SDK — login, poll, send, typing, context_token |
+| `qrcode-terminal` | Render scannable QR code in terminal |
+| `@mariozechner/pi-coding-agent` | Pi extension API (peer dependency) |
+
+## Pi Package
+
+This is a [pi package](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md). It declares `"keywords": ["pi-package"]` and `"pi": { "extensions": [...] }` in package.json. Pi auto-discovers the extension after install.
