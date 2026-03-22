@@ -1,6 +1,6 @@
 import {
   P, A, Code, CodeBlock, Caption, Section, ComparisonTable,
-  List, OL, Li, NavCard, NavGrid,
+  List, OL, Li, NavCard, NavGrid, SequenceDiagram,
 } from 'wechatbot-website/src/components/markdown'
 
 export const mdxComponents = {
@@ -14,6 +14,6 @@ export const mdxComponents = {
   },
   ul: List, ol: OL, li: Li,
 
-  Section, CodeBlock, Caption, ComparisonTable, NavCard, NavGrid,
+  Section, CodeBlock, Caption, ComparisonTable, NavCard, NavGrid, SequenceDiagram,
   P, A, Code, List, OL, Li,
 }
