@@ -1,8 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::time::SystemTime;
 
 /// Message sender type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(i32)]
 pub enum MessageType {
     User = 1,
@@ -10,7 +11,7 @@ pub enum MessageType {
 }
 
 /// Message delivery state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(i32)]
 pub enum MessageState {
     New = 0,
@@ -19,7 +20,7 @@ pub enum MessageState {
 }
 
 /// Content type of a message item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(i32)]
 pub enum MessageItemType {
     Text = 1,
@@ -86,6 +87,25 @@ pub struct VoiceItem {
     pub playtime: Option<i32>,
 }
 
+fn deserialize_optional_len<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Len {
+        Str(String),
+        I(i64),
+        U(u64),
+    }
+    match Option::<Len>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(Len::Str(s)) => Ok(Some(s)),
+        Some(Len::I(n)) => Ok(Some(n.to_string())),
+        Some(Len::U(n)) => Ok(Some(n.to_string())),
+    }
+}
+
 /// File content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileItem {
@@ -95,7 +115,11 @@ pub struct FileItem {
     pub file_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub md5: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_len",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub len: Option<String>,
 }
 
@@ -117,8 +141,9 @@ pub struct VideoItem {
 pub struct RefMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// API may send a full item object or a scalar; use `Value` like Python's dict parse.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_item: Option<Box<WireMessageItem>>,
+    pub message_item: Option<serde_json::Value>,
 }
 
 /// A single content item in a message.
@@ -274,6 +299,28 @@ mod tests {
         assert_eq!(MessageItemType::Voice as i32, 3);
         assert_eq!(MessageItemType::File as i32, 4);
         assert_eq!(MessageItemType::Video as i32, 5);
+    }
+
+    #[test]
+    fn wire_message_deserializes_numeric_enums_like_api() {
+        let json = r#"{
+            "from_user_id": "u1",
+            "to_user_id": "b1",
+            "client_id": "c1",
+            "create_time_ms": 1700000000000,
+            "message_type": 1,
+            "message_state": 2,
+            "context_token": "ctx",
+            "item_list": [{"type": 1, "text_item": {"text": "hi"}}]
+        }"#;
+        let wire: WireMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(wire.message_type, MessageType::User);
+        assert_eq!(wire.message_state, MessageState::Finish);
+        assert_eq!(wire.item_list[0].item_type, MessageItemType::Text);
+        assert_eq!(
+            wire.item_list[0].text_item.as_ref().unwrap().text,
+            "hi"
+        );
     }
 
     #[test]

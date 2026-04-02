@@ -604,13 +604,15 @@ fn parse_message(wire: &WireMessage) -> Option<IncomingMessage> {
             });
         }
         if let Some(ref refm) = item.ref_msg {
+            let quoted_text = refm.message_item.as_ref().and_then(|v| {
+                v.get("text_item")?
+                    .get("text")?
+                    .as_str()
+                    .map(std::string::ToString::to_string)
+            });
             msg.quoted = Some(QuotedMessage {
                 title: refm.title.clone(),
-                text: refm
-                    .message_item
-                    .as_ref()
-                    .and_then(|i| i.text_item.as_ref())
-                    .map(|t| t.text.clone()),
+                text: quoted_text,
             });
         }
     }
@@ -950,10 +952,9 @@ mod tests {
                 image_item: None, voice_item: None, file_item: None, video_item: None,
                 ref_msg: Some(RefMessage {
                     title: Some("Original".to_string()),
-                    message_item: Some(Box::new(WireMessageItem {
-                        item_type: MessageItemType::Text,
-                        text_item: Some(TextItem { text: "original text".to_string() }),
-                        image_item: None, voice_item: None, file_item: None, video_item: None, ref_msg: None,
+                    message_item: Some(serde_json::json!({
+                        "type": 1,
+                        "text_item": { "text": "original text" }
                     })),
                 }),
             }],

@@ -43,7 +43,8 @@ pub struct QrStatusResponse {
 /// Get updates response.
 #[derive(Debug, Deserialize)]
 pub struct GetUpdatesResponse {
-    pub ret: i32,
+    #[serde(default)]
+    pub ret: Option<i32>,
     #[serde(default)]
     pub msgs: Vec<WireMessage>,
     #[serde(default)]
@@ -106,9 +107,10 @@ impl ILinkClient {
         });
         let resp = self.api_post(base_url, "/ilink/bot/getupdates", token, &body, 45).await?;
         let result: GetUpdatesResponse = serde_json::from_value(resp)?;
-        if result.ret != 0 {
-            let code = result.errcode.unwrap_or(result.ret);
-            let msg = result.errmsg.unwrap_or_else(|| format!("ret={}", result.ret));
+        if result.ret.is_some_and(|ret| ret != 0) {
+            let ret = result.ret.unwrap_or_default();
+            let code = result.errcode.unwrap_or(ret);
+            let msg = result.errmsg.unwrap_or_else(|| format!("ret={}", ret));
             return Err(WeChatBotError::Api {
                 message: msg,
                 http_status: 200,
