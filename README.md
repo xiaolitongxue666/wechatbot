@@ -7,8 +7,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@wechatbot/wechatbot"><img src="https://img.shields.io/npm/v/@wechatbot/wechatbot?style=flat-square&label=npm" alt="npm"></a>
-  <a href="https://github.com/corespeed-io/wechatbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/corespeed-io/wechatbot?style=flat-square" alt="License"></a>
-  <a href="https://github.com/corespeed-io/wechatbot"><img src="https://img.shields.io/github/stars/corespeed-io/wechatbot?style=flat-square" alt="Stars"></a>
+  <a href="https://github.com/xiaolitongxue666/wechatbot/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xiaolitongxue666/wechatbot?style=flat-square" alt="License"></a>
+  <a href="https://github.com/xiaolitongxue666/wechatbot"><img src="https://img.shields.io/github/stars/xiaolitongxue666/wechatbot?style=flat-square" alt="Stars"></a>
 </p>
 
 ---
@@ -23,7 +23,7 @@
 |-----|------|------|
 | [Node.js](nodejs/) | `npm install @wechatbot/wechatbot` | ✅ 生产就绪 |
 | [Python](python/) | `pip install wechatbot-sdk` | ✅ 生产就绪 |
-| [Go](golang/) | `go get github.com/corespeed-io/wechatbot/golang` | ✅ 生产就绪 |
+| [Go](golang/) | `go get github.com/xiaolitongxue666/wechatbot/golang` | ✅ 生产就绪 |
 | [Rust](rust/) | `cargo add wechatbot` | ✅ 生产就绪 |
 
 ## ⚡ 快速开始
@@ -146,14 +146,14 @@ pi install npm:@wechatbot/pi-agent
 
 ## 🔧 预编译 Echo Bot
 
-不想写代码？可以直接下载预编译的 Echo Bot 体验。详见 [GitHub Releases](https://github.com/corespeed-io/wechatbot/releases)。
+不想写代码？可以直接下载预编译的 Echo Bot 体验。详见 [GitHub Releases](https://github.com/xiaolitongxue666/wechatbot/releases)。
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/corespeed-io/wechatbot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xiaolitongxue666/wechatbot/main/install.sh | bash
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/corespeed-io/wechatbot/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/xiaolitongxue666/wechatbot/main/install.ps1 | iex
 ```
 
 ## 📁 项目结构
