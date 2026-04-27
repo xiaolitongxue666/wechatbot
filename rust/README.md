@@ -40,7 +40,13 @@ src/
 ├── error.rs         ← Error hierarchy (thiserror)
 ├── protocol.rs      ← Raw iLink API calls (reqwest)
 ├── crypto.rs        ← AES-128-ECB encrypt/decrypt + key encoding
-└── bot.rs           ← WeChatBot client (login, run, reply, send)
+├── bot.rs           ← WeChatBot client (login, run, reply, send)
+├── session.rs       ← Multi-bot session manager
+├── ingest.rs        ← Event normalization and persistence pipeline
+├── queue.rs         ← In-memory / Redis event queue abstraction
+├── storage/         ← Postgres, Redis state, media store adapters
+├── forwarder.rs     ← Async forwarding worker with retry
+└── runtime.rs       ← Runtime composition for multi-bot orchestration
 ```
 
 ## API Reference
@@ -220,6 +226,18 @@ MessageType, MessageState, MessageItemType, ContentType, MediaType
 cd rust
 cargo test
 ```
+
+## Scripts
+
+```bash
+cd rust
+bash scripts/run_protocol_echo.sh
+bash scripts/test.sh
+```
+
+## Documentation
+
+See runtime and deployment docs under `rust/doc/`.
 
 ## License
 

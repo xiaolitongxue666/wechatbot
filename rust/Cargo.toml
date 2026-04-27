@@ -23,13 +23,40 @@ tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2"
 dirs-next = "2"
+async-trait = "0.1"
+toml = "0.8"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "json", "uuid", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+redis = { version = "0.27", features = ["tokio-comp"] }
+sha2 = "0.10"
+hmac = "0.12"
+time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+askama = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tracing-subscriber = "0.3"
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1", features = ["full"] }
+http-body-util = "0.1"
+wiremock = "0.6"
+tempfile = "3"
+reqwest = { version = "0.12", features = ["json"] }
+
+[[bin]]
+name = "admin"
+path = "src/bin/admin.rs"
 
 [[example]]
 name = "echo_bot"
 path = "examples/echo_bot.rs"
+
+[[example]]
+name = "multi_bot_runtime"
+path = "examples/multi_bot_runtime.rs"
