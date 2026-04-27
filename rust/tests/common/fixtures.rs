@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;

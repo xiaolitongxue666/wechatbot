@@ -2,6 +2,9 @@ use crate::error::{Result, WeChatBotError};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+const DEFAULT_EXPIRE_SECS: u64 = 3600;
+const DEFAULT_TYPING_TRIGGER_MS: u64 = 1000;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseMode {
@@ -63,6 +66,40 @@ impl Default for AdminConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeConfig {
+    #[serde(default = "default_expire_secs")]
+    pub qr_expire_secs: u64,
+    #[serde(default = "default_expire_secs")]
+    pub session_online_timeout_secs: u64,
+    #[serde(default = "default_expire_secs")]
+    pub typing_keepalive_secs: u64,
+    #[serde(default = "default_expire_secs")]
+    pub context_expire_secs: u64,
+    #[serde(default = "default_typing_trigger_ms")]
+    pub typing_trigger_ms: u64,
+}
+
+fn default_expire_secs() -> u64 {
+    DEFAULT_EXPIRE_SECS
+}
+
+fn default_typing_trigger_ms() -> u64 {
+    DEFAULT_TYPING_TRIGGER_MS
+}
+
+impl Default for RuntimeConfig {
+    fn default() -> Self {
+        Self {
+            qr_expire_secs: default_expire_secs(),
+            session_online_timeout_secs: default_expire_secs(),
+            typing_keepalive_secs: default_expire_secs(),
+            context_expire_secs: default_expire_secs(),
+            typing_trigger_ms: default_typing_trigger_ms(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
@@ -70,10 +107,13 @@ pub struct AppConfig {
     pub forwarder: ForwarderConfig,
     #[serde(default)]
     pub admin: AdminConfig,
+    #[serde(default)]
+    pub runtime: RuntimeConfig,
 }
 
 impl AppConfig {
     pub async fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
+        ensure_env_file_and_load(path.as_ref()).await?;
         let content = tokio::fs::read_to_string(path).await?;
         let mut config: AppConfig = toml::from_str(&content)
             .map_err(|error| WeChatBotError::Other(format!("invalid config: {error}")))?;
@@ -166,7 +206,49 @@ impl AppConfig {
         if let Ok(value) = std::env::var("WECHATBOT_REDIS_REMOTE_URL") {
             self.redis.remote_url = Some(value);
         }
+
+        if let Ok(value) = std::env::var("WECHATBOT_QR_EXPIRE_SECS") {
+            if let Ok(parsed) = value.parse::<u64>() {
+                self.runtime.qr_expire_secs = parsed;
+            }
+        }
+        if let Ok(value) = std::env::var("WECHATBOT_SESSION_ONLINE_TIMEOUT_SECS") {
+            if let Ok(parsed) = value.parse::<u64>() {
+                self.runtime.session_online_timeout_secs = parsed;
+            }
+        }
+        if let Ok(value) = std::env::var("WECHATBOT_TYPING_KEEPALIVE_SECS") {
+            if let Ok(parsed) = value.parse::<u64>() {
+                self.runtime.typing_keepalive_secs = parsed;
+            }
+        }
+        if let Ok(value) = std::env::var("WECHATBOT_CONTEXT_EXPIRE_SECS") {
+            if let Ok(parsed) = value.parse::<u64>() {
+                self.runtime.context_expire_secs = parsed;
+            }
+        }
+        if let Ok(value) = std::env::var("WECHATBOT_TYPING_TRIGGER_MS") {
+            if let Ok(parsed) = value.parse::<u64>() {
+                self.runtime.typing_trigger_ms = parsed;
+            }
+        }
     }
+}
+
+async fn ensure_env_file_and_load(config_path: &Path) -> Result<()> {
+    let config_dir = config_path.parent().unwrap_or_else(|| Path::new("."));
+    let project_root = config_dir.parent().unwrap_or(config_dir);
+    let env_path = project_root.join(".env");
+    let env_example_path = project_root.join(".env.example");
+
+    if tokio::fs::metadata(&env_path).await.is_err() && tokio::fs::metadata(&env_example_path).await.is_ok() {
+        tokio::fs::copy(&env_example_path, &env_path)
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("copy .env.example failed: {error}")))?;
+    }
+
+    let _ = dotenvy::from_path_override(&env_path);
+    Ok(())
 }
 
 fn parse_mode(raw_mode: &str) -> DatabaseMode {
@@ -210,6 +292,7 @@ mod tests {
                 timeout_ms: 1000,
             },
             admin: AdminConfig::default(),
+            runtime: RuntimeConfig::default(),
         }
     }
 

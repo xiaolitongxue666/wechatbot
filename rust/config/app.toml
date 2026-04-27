@@ -26,3 +26,10 @@ timeout_ms = 3000
 
 [admin]
 bind = "127.0.0.1:8787"
+
+[runtime]
+qr_expire_secs = 3600
+session_online_timeout_secs = 3600
+typing_keepalive_secs = 3600
+context_expire_secs = 3600
+typing_trigger_ms = 1000

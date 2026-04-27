@@ -3038,6 +3038,7 @@ dependencies = [
  "base64",
  "chrono",
  "dirs-next",
+ "dotenvy",
  "hex",
  "hmac",
  "http-body-util",

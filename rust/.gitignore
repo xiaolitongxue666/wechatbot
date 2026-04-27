@@ -1,0 +1,10 @@
+# Local environment and runtime artifacts
+.env
+.admin.log
+.admin.pid
+
+# Build outputs
+target/
+
+# OS / editor artifacts
+.DS_Store

@@ -52,23 +52,39 @@ cmd_seed() {
 
     cat <<'SQL' | psql_exec_file "$DB_URL" /dev/stdin
 
--- 5 个 bot_sessions
-INSERT INTO bot_sessions (session_id, tenant_id, owner_id, wx_user_id, status, last_heartbeat_at, created_at, updated_at)
+-- 5 个 bots
+INSERT INTO bots (bot_id, bot_name, status, last_heartbeat_at, created_at, updated_at)
 VALUES
-  ('session-001', 'tenant-a', 'owner-alice',  'wx_alice',   'online',  NOW() - INTERVAL '30 seconds',  NOW(), NOW()),
-  ('session-002', 'tenant-a', 'owner-alice',  'wx_bob',     'online',  NOW() - INTERVAL '60 seconds',  NOW(), NOW()),
-  ('session-003', 'tenant-b', 'owner-charlie','wx_charlie', 'offline', NULL,                            NOW(), NOW()),
-  ('session-004', 'tenant-b', 'owner-dave',   'wx_dave',    'online',  NOW(),                            NOW(), NOW()),
-  ('session-005', 'tenant-a', 'owner-eve',    NULL,         'expired', NOW() - INTERVAL '400 seconds',  NOW(), NOW())
-ON CONFLICT (session_id) DO NOTHING;
+  ('bot-001', 'demo-1', 'online',  NOW() - INTERVAL '30 seconds',  NOW(), NOW()),
+  ('bot-002', 'demo-2', 'online',  NOW() - INTERVAL '60 seconds',  NOW(), NOW()),
+  ('bot-003', 'demo-3', 'offline', NULL,                            NOW(), NOW()),
+  ('bot-004', 'demo-4', 'online',  NOW(),                           NOW(), NOW()),
+  ('bot-005', 'demo-5', 'expired', NOW() - INTERVAL '400 seconds', NOW(), NOW())
+ON CONFLICT (bot_id) DO UPDATE SET
+  status = EXCLUDED.status,
+  last_heartbeat_at = EXCLUDED.last_heartbeat_at,
+  updated_at = NOW();
+
+-- 5 个 bot_sessions
+INSERT INTO bot_sessions (session_id, bot_id, user_id, status, created_at, updated_at)
+VALUES
+  ('sess-001', 'bot-001', 'wx_alice',   'active', NOW(), NOW()),
+  ('sess-002', 'bot-002', 'wx_bob',     'active', NOW(), NOW()),
+  ('sess-003', 'bot-003', 'wx_charlie', 'active', NOW(), NOW()),
+  ('sess-004', 'bot-004', 'wx_dave',    'active', NOW(), NOW()),
+  ('sess-005', 'bot-005', 'wx_eve',     'active', NOW(), NOW())
+ON CONFLICT (session_id) DO UPDATE SET
+  bot_id = EXCLUDED.bot_id,
+  user_id = EXCLUDED.user_id,
+  status = EXCLUDED.status,
+  updated_at = NOW();
 
 -- 30 条 chat_messages，平均分配到 5 个 session
-INSERT INTO chat_messages (message_id, event_id, session_id, tenant_id, from_user_id, to_user_id, content_type, text_content, raw_payload_json, received_at)
+INSERT INTO chat_messages (message_id, event_id, session_id, from_user_id, to_user_id, content_type, text_content, raw_payload_json, received_at)
 SELECT
   'msg-' || lpad(i::text, 3, '0'),
   'evt-' || lpad(i::text, 3, '0'),
-  'session-' || lpad(((i - 1) % 5 + 1)::text, 3, '0'),
-  'tenant-a',
+  'sess-' || lpad(((i - 1) % 5 + 1)::text, 3, '0'),
   CASE (i % 6)
     WHEN 0 THEN 'user_alice'
     WHEN 1 THEN 'user_bob'
@@ -98,16 +114,16 @@ ON CONFLICT (message_id) DO NOTHING;
 -- 3 条 forward_events (1 success + 1 failed + 1 retrying)
 INSERT INTO forward_events (event_id, session_id, target_service, status, retry_count, last_error, updated_at)
 VALUES
-  ('evt-dlq-001',      'session-001', 'http://localhost:8081/webhook/wechat', 'failed',    5, 'connection timeout',           NOW()),
-  ('evt-success-001',  'session-001', 'http://localhost:8081/webhook/wechat', 'success',   1, NULL,                           NOW()),
-  ('evt-retrying-001', 'session-002', 'http://localhost:8081/webhook/wechat', 'retrying',  2, '500 internal server error',   NOW())
+  ('evt-dlq-001',      'sess-001', 'http://localhost:8081/webhook/wechat', 'failed',    5, 'connection timeout',           NOW()),
+  ('evt-success-001',  'sess-001', 'http://localhost:8081/webhook/wechat', 'success',   1, NULL,                           NOW()),
+  ('evt-retrying-001', 'sess-002', 'http://localhost:8081/webhook/wechat', 'retrying',  2, '500 internal server error',   NOW())
 ON CONFLICT (event_id) DO NOTHING;
 
 -- 2 条 forward_dlq (永久失败)
 INSERT INTO forward_dlq (event_id, session_id, payload_json, error_message, failed_at)
 VALUES
-  ('evt-dlq-permanent-001', 'session-001', '{"type":"text","text":"hello"}'::jsonb, 'permanent failure after 5 retries', NOW()),
-  ('evt-dlq-permanent-002', 'session-002', '{"type":"image","url":"x"}'::jsonb,    'webhook unreachable',               NOW())
+  ('evt-dlq-permanent-001', 'sess-001', '{"type":"text","text":"hello"}'::jsonb, 'permanent failure after 5 retries', NOW()),
+  ('evt-dlq-permanent-002', 'sess-002', '{"type":"image","url":"x"}'::jsonb,    'webhook unreachable',               NOW())
 ON CONFLICT (event_id) DO NOTHING;
 
 SQL

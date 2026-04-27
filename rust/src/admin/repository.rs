@@ -1,8 +1,7 @@
 use crate::error::{Result, WeChatBotError};
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
-const ONLINE_HEARTBEAT_SECS: i64 = 180;
 
 pub(crate) fn paging_limit_offset(page: u64, page_size: u64) -> (i64, i64) {
     let page_size = page_size.clamp(1, 200);
@@ -60,11 +59,15 @@ pub struct ChatMessageRow {
 #[derive(Clone)]
 pub struct AdminRepository {
     pool: PgPool,
+    online_heartbeat_secs: i64,
 }
 
 impl AdminRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, online_heartbeat_secs: i64) -> Self {
+        Self {
+            pool,
+            online_heartbeat_secs,
+        }
     }
 
     pub async fn overview(&self) -> Result<AdminOverview> {
@@ -83,7 +86,7 @@ impl AdminRepository {
               (SELECT COUNT(*)::bigint FROM forward_events WHERE status IS DISTINCT FROM 'success') AS fwd_bad
             "#,
         )
-        .bind(ONLINE_HEARTBEAT_SECS)
+        .bind(self.online_heartbeat_secs)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| WeChatBotError::Other(format!("admin overview query failed: {e}")))?;
@@ -156,6 +159,75 @@ impl AdminRepository {
         .await
         .map_err(|e| WeChatBotError::Other(format!("get bot_session failed: {e}")))?;
         Ok(row)
+    }
+
+    pub async fn delete_bot_hard(&self, bot_id: &str) -> Result<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("begin transaction failed: {error}")))?;
+
+        let session_rows = sqlx::query("SELECT session_id FROM bot_sessions WHERE bot_id = $1")
+            .bind(bot_id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("query bot sessions failed: {error}")))?;
+
+        for row in session_rows {
+            let session_id: String = row
+                .try_get("session_id")
+                .map_err(|error| WeChatBotError::Other(format!("read session_id failed: {error}")))?;
+
+            sqlx::query(
+                r#"
+                DELETE FROM chat_media
+                WHERE message_id IN (
+                    SELECT message_id FROM chat_messages WHERE session_id = $1
+                )
+                "#,
+            )
+            .bind(&session_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("delete chat_media failed: {error}")))?;
+
+            sqlx::query("DELETE FROM chat_messages WHERE session_id = $1")
+                .bind(&session_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| WeChatBotError::Other(format!("delete chat_messages failed: {error}")))?;
+
+            sqlx::query("DELETE FROM forward_events WHERE session_id = $1")
+                .bind(&session_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| WeChatBotError::Other(format!("delete forward_events failed: {error}")))?;
+
+            sqlx::query("DELETE FROM forward_dlq WHERE session_id = $1")
+                .bind(&session_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|error| WeChatBotError::Other(format!("delete forward_dlq failed: {error}")))?;
+        }
+
+        sqlx::query("DELETE FROM bot_sessions WHERE bot_id = $1")
+            .bind(bot_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("delete bot_sessions failed: {error}")))?;
+
+        sqlx::query("DELETE FROM bots WHERE bot_id = $1")
+            .bind(bot_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("delete bots failed: {error}")))?;
+
+        tx.commit()
+            .await
+            .map_err(|error| WeChatBotError::Other(format!("commit transaction failed: {error}")))?;
+
+        Ok(())
     }
 
     pub async fn list_messages_page(

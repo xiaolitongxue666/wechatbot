@@ -96,6 +96,9 @@ impl MultiBotRuntime {
         let session_state_repo = self.session_state_repo.clone();
         let heartbeat_tasks = self.heartbeat_tasks.clone();
         let qr_callback: Arc<dyn Fn(&str) + Send + Sync> = Arc::from(qr_callback);
+        let context_expire_secs = self.config.runtime.context_expire_secs;
+        let typing_keepalive_secs = self.config.runtime.typing_keepalive_secs;
+        let typing_trigger_ms = self.config.runtime.typing_trigger_ms;
 
         tokio::spawn(async move {
             loop {
@@ -124,7 +127,12 @@ impl MultiBotRuntime {
                     .await
                     .ok();
 
-                let session_bot = Arc::new(WeChatBot::new(BotOptions::default()));
+                let session_bot = Arc::new(WeChatBot::new(BotOptions {
+                    context_expire_secs,
+                    typing_keepalive_secs,
+                    typing_trigger_ms,
+                    ..Default::default()
+                }));
                 session_bot.set_credentials(&credentials).await;
 
                 let sid = session_id.clone();
@@ -139,6 +147,7 @@ impl MultiBotRuntime {
                 let bid2 = bid.clone();
                 let sid2 = sid.clone();
                 let uid2 = user_id.clone();
+                let session_state_repo_for_messages = session_state_repo.clone();
                 session_bot.on_message(Box::new(move |message| {
                     let message = message.clone();
                     let bot = bot_for_ingest.clone();
@@ -146,7 +155,26 @@ impl MultiBotRuntime {
                     let b = bid2.clone();
                     let s = sid2.clone();
                     let u = uid2.clone();
+                    let state_repo = session_state_repo_for_messages.clone();
                     tokio::spawn(async move {
+                        let typing_target_user = message.user_id.clone();
+                        let typing_delay = Duration::from_millis(bot.typing_trigger_ms());
+                        let typing_keepalive = Duration::from_secs(bot.typing_keepalive_secs().max(1));
+                        let typing_bot = bot.clone();
+                        let typing_task = tokio::spawn(async move {
+                            sleep(typing_delay).await;
+                            loop {
+                                if typing_bot.send_typing(&typing_target_user).await.is_err() {
+                                    break;
+                                }
+                                sleep(typing_keepalive).await;
+                            }
+                        });
+
+                        if let Err(error) = state_repo.touch_heartbeat(&s).await {
+                            tracing::warn!("touch heartbeat on message failed for {}: {}", s, error);
+                        }
+
                         if let Err(error) = ing.ingest(bot.clone(), &b, &s, &message).await {
                             tracing::error!("ingest failed: {}", error);
                         }
@@ -157,6 +185,9 @@ impl MultiBotRuntime {
                         if let Err(e) = ing.ingest_sent(&s, &b, &u, &message.user_id, &echo).await {
                             tracing::error!("ingest_sent failed: {}", e);
                         }
+
+                        typing_task.abort();
+                        let _ = bot.stop_typing(&message.user_id).await;
                     });
                 })).await;
 

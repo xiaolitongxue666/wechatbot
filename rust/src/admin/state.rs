@@ -10,6 +10,8 @@ pub struct AdminState {
     pub qr_store: QrUrlStore,
     pub admin_host: String,
     pub admin_port: u16,
+    pub session_online_timeout_secs: u64,
+    pub qr_expire_secs: u64,
 }
 
 impl AdminState {

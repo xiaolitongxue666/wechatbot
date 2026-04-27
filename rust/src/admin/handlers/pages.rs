@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Json;
 use axum_extra::extract::CookieJar;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 fn format_dt_opt(dt: &Option<DateTime<Utc>>) -> String {
@@ -25,6 +25,26 @@ fn internal_error(err: impl std::fmt::Display) -> Response {
 
 fn bad_request(err: impl std::fmt::Display) -> Response {
     (StatusCode::BAD_REQUEST, err.to_string()).into_response()
+}
+
+fn is_heartbeat_online(last_heartbeat_at: Option<DateTime<Utc>>, timeout_secs: u64) -> bool {
+    match last_heartbeat_at {
+        Some(timestamp) => Utc::now() - timestamp <= Duration::seconds(timeout_secs as i64),
+        None => false,
+    }
+}
+
+fn normalize_status_by_heartbeat(
+    status: &str,
+    last_heartbeat_at: Option<DateTime<Utc>>,
+    timeout_secs: u64,
+) -> String {
+    let status_lower = status.to_ascii_lowercase();
+    if status_lower == "online" && !is_heartbeat_online(last_heartbeat_at, timeout_secs) {
+        "offline".to_string()
+    } else {
+        status.to_string()
+    }
 }
 
 pub async fn root_redirect() -> Redirect {
@@ -127,17 +147,14 @@ pub async fn bot_list(
     let has_runtime = state.runtime.is_some();
     let mut rows = Vec::with_capacity(rows_db.len());
     for row in rows_db {
-        let runtime_status = if let Some(ref rt) = state.runtime {
-            match rt.session_manager.status_of(&row.bot_id).await {
-                Some(s) => format!("{:?}", s),
-                None => row.status.clone(),
-            }
-        } else {
-            row.status.clone()
-        };
+        let effective_status = normalize_status_by_heartbeat(
+            &row.status,
+            row.last_heartbeat_at,
+            state.session_online_timeout_secs,
+        );
         rows.push(BotListRowVm {
             bot_id: row.bot_id,
-            status: runtime_status,
+            status: effective_status,
             last_heartbeat: format_dt_opt(&row.last_heartbeat_at),
             updated_at: format_dt(row.updated_at),
         });
@@ -162,6 +179,17 @@ struct SessionRowVm {
     created_at: String,
 }
 
+#[derive(Serialize)]
+pub struct BotStatusJson {
+    pub bot_id: String,
+    pub status: String,
+    pub is_online: bool,
+    pub can_start: bool,
+    pub has_qr_url: bool,
+    pub heartbeat_display: String,
+    pub start_action: Option<String>,
+}
+
 #[derive(Template)]
 #[template(path = "admin/bot_detail.html")]
 struct BotDetailTpl<'a> {
@@ -179,7 +207,70 @@ struct BotDetailTpl<'a> {
     register_link: String,
     has_runtime: bool,
     is_online: bool,
+    can_start: bool,
+    start_action: Option<String>,
     sessions: &'a [SessionRowVm],
+}
+
+fn build_bot_status_payload(
+    bot_id: &str,
+    db_status: &str,
+    last_heartbeat_at: Option<DateTime<Utc>>,
+    runtime_status: Option<crate::session::SessionStatus>,
+    has_runtime: bool,
+    has_qr_url: bool,
+    timeout_secs: u64,
+) -> BotStatusJson {
+    let status_from_runtime = runtime_status.map(|status| format!("{:?}", status));
+    let base_status = status_from_runtime.unwrap_or_else(|| db_status.to_string());
+    let normalized_status = normalize_status_by_heartbeat(&base_status, last_heartbeat_at, timeout_secs);
+    let is_online = normalized_status.eq_ignore_ascii_case("online");
+    let can_start = has_runtime && !is_online;
+    let start_action = if can_start {
+        Some(format!("/admin/bots/{}/start", urlencoding::encode(bot_id)))
+    } else {
+        None
+    };
+
+    BotStatusJson {
+        bot_id: bot_id.to_string(),
+        status: normalized_status,
+        is_online,
+        can_start,
+        has_qr_url,
+        heartbeat_display: format_dt_opt(&last_heartbeat_at),
+        start_action,
+    }
+}
+
+pub async fn bot_detail_status_json(
+    State(state): State<AdminState>,
+    Path(bot_id): Path<String>,
+) -> Result<Json<BotStatusJson>, Response> {
+    let bot = state.repo.get_bot(&bot_id).await.map_err(internal_error)?;
+    let Some(bot) = bot else {
+        return Err((StatusCode::NOT_FOUND, "bot not found".to_string()).into_response());
+    };
+
+    let sessions = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+    let latest_session_id = sessions.first().map(|session| session.session_id.clone());
+    let runtime_status = if let (Some(runtime), Some(session_id)) = (&state.runtime, &latest_session_id) {
+        runtime.session_manager.status_of(session_id).await
+    } else {
+        None
+    };
+
+    let payload = build_bot_status_payload(
+        &bot_id,
+        &bot.status,
+        bot.last_heartbeat_at,
+        runtime_status,
+        state.runtime.is_some(),
+        state.qr_store.has_fresh(&bot_id, state.qr_expire_secs),
+        state.session_online_timeout_secs,
+    );
+
+    Ok(Json(payload))
 }
 
 pub async fn bot_detail(
@@ -200,7 +291,7 @@ pub async fn bot_detail(
     };
     let i = i18n(&prefs.lang);
 
-    let qr_url = state.qr_store.get(&bot_id);
+    let qr_url = state.qr_store.get(&bot_id, state.qr_expire_secs);
     let qr_image_url = qr_url
         .as_ref()
         .map(|url| {
@@ -213,23 +304,23 @@ pub async fn bot_detail(
 
     let register_link = state.register_link(&bot_id);
 
-    let has_runtime = state.runtime.is_some();
-    let (is_online, runtime_status) = if let Some(ref rt) = state.runtime {
-        let status = rt.session_manager.status_of(&bot_id).await;
-        let s = match status {
-            Some(crate::session::SessionStatus::Online) => "Online".to_string(),
-            Some(s) => format!("{:?}", s),
-            None => bot.status.clone(),
-        };
-        (
-            matches!(status, Some(crate::session::SessionStatus::Online)),
-            s,
-        )
+    let sessions_db = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+    let latest_session_id = sessions_db.first().map(|session| session.session_id.clone());
+    let runtime_status = if let (Some(runtime), Some(session_id)) = (&state.runtime, &latest_session_id) {
+        runtime.session_manager.status_of(session_id).await
     } else {
-        (bot.status == "online", bot.status.clone())
+        None
     };
 
-    let sessions_db = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+    let status_payload = build_bot_status_payload(
+        &bot_id,
+        &bot.status,
+        bot.last_heartbeat_at,
+        runtime_status,
+        state.runtime.is_some(),
+        qr_url.is_some(),
+        state.session_online_timeout_secs,
+    );
     let sessions: Vec<SessionRowVm> = sessions_db
         .iter()
         .map(|s| SessionRowVm {
@@ -246,15 +337,17 @@ pub async fn bot_detail(
         lang_attr: if prefs.lang == "en" { "en" } else { "zh-CN" },
         nav_active: "bots",
         bot_id: &bot_id,
-        bot_status: &runtime_status,
-        heartbeat_display: format_dt_opt(&bot.last_heartbeat_at),
+        bot_status: &status_payload.status,
+        heartbeat_display: status_payload.heartbeat_display.clone(),
         created_display: format_dt(bot.created_at),
         updated_display: format_dt(bot.updated_at),
         qr_url: qr_url.unwrap_or_default(),
         qr_image_url,
         register_link,
-        has_runtime,
-        is_online,
+        has_runtime: state.runtime.is_some(),
+        is_online: status_payload.is_online,
+        can_start: status_payload.can_start,
+        start_action: status_payload.start_action.clone(),
         sessions: &sessions,
     };
     let html = page.render().map_err(internal_error)?;
@@ -321,7 +414,7 @@ pub async fn bot_create_submit(
 
 pub async fn bot_start(
     State(state): State<AdminState>,
-    Path(session_id): Path<String>,
+    Path(bot_id): Path<String>,
 ) -> Result<Response, Response> {
     let i = i18n("zh");
     let runtime = state
@@ -329,18 +422,26 @@ pub async fn bot_start(
         .as_ref()
         .ok_or_else(|| bad_request(i.no_runtime))?;
 
+    state.qr_store.remove(&bot_id);
+
+    let qr_store = state.qr_store.clone();
+    let bot_id_for_qr = bot_id.clone();
+    let qr_callback = Box::new(move |url: &str| {
+        qr_store.set(&bot_id_for_qr, url);
+    });
+
     runtime
-        .start_session(&session_id, false)
+        .create_bot(&bot_id, qr_callback)
         .await
         .map_err(internal_error)?;
 
-    let back_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
+    let back_url = format!("/admin/bots/{}", urlencoding::encode(&bot_id));
     Ok(Redirect::to(&back_url).into_response())
 }
 
 pub async fn bot_stop(
     State(state): State<AdminState>,
-    Path(session_id): Path<String>,
+    Path(bot_id): Path<String>,
 ) -> Result<Response, Response> {
     let i = i18n("zh");
     let runtime = state
@@ -348,15 +449,56 @@ pub async fn bot_stop(
         .as_ref()
         .ok_or_else(|| bad_request(i.no_runtime))?;
 
-    runtime
-        .stop_session(&session_id)
+    let sessions = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+    if let Some(session) = sessions.first() {
+        runtime
+            .stop_session(&session.session_id)
+            .await
+            .map_err(internal_error)?;
+    }
+
+    let back_url = format!("/admin/bots/{}", urlencoding::encode(&bot_id));
+    Ok(Redirect::to(&back_url).into_response())
+}
+
+pub async fn bot_delete(
+    State(state): State<AdminState>,
+    Path(bot_id): Path<String>,
+    Query(q): Query<UiQuery>,
+    jar: CookieJar,
+) -> Result<Response, Response> {
+    let prefs = UiPrefs::resolve(q.clone(), &jar);
+    let jar = UiPrefs::apply_cookies_from_query(&q, jar);
+
+    let bot = state.repo.get_bot(&bot_id).await.map_err(internal_error)?;
+    let Some(_) = bot else {
+        let i = i18n(&prefs.lang);
+        return Ok((
+            jar,
+            (StatusCode::NOT_FOUND, Html(not_found_html(&i, &prefs))),
+        )
+            .into_response());
+    };
+
+    if let Some(runtime) = &state.runtime {
+        let sessions = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+        for session in sessions {
+            runtime
+                .stop_session(&session.session_id)
+                .await
+                .map_err(internal_error)?;
+        }
+    }
+
+    state.qr_store.remove(&bot_id);
+    state
+        .repo
+        .delete_bot_hard(&bot_id)
         .await
         .map_err(internal_error)?;
 
-    state.qr_store.remove(&session_id);
-
-    let back_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
-    Ok(Redirect::to(&back_url).into_response())
+    let list_url = format!("/admin/bots?{}", prefs.query_suffix());
+    Ok((jar, Redirect::to(&list_url)).into_response())
 }
 
 fn not_found_html(i18n: &I18n, prefs: &UiPrefs) -> String {
@@ -371,6 +513,33 @@ fn not_found_html(i18n: &I18n, prefs: &UiPrefs) -> String {
         prefs.query_suffix(),
         i18n.nav_bots,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_bot_status_payload;
+    use chrono::Utc;
+
+    #[test]
+    fn build_status_allows_start_when_offline_and_runtime_available() {
+        let payload = build_bot_status_payload("bot-offline", "offline", None, None, true, false, 3600);
+        assert!(payload.can_start);
+        assert_eq!(payload.start_action.as_deref(), Some("/admin/bots/bot-offline/start"));
+    }
+
+    #[test]
+    fn build_status_disallows_start_when_online() {
+        let payload = build_bot_status_payload("bot-online", "online", Some(Utc::now()), None, true, false, 3600);
+        assert!(!payload.can_start);
+        assert!(payload.start_action.is_none());
+    }
+
+    #[test]
+    fn build_status_disallows_start_without_runtime() {
+        let payload = build_bot_status_payload("bot-nort", "offline", None, None, false, false, 3600);
+        assert!(!payload.can_start);
+        assert!(payload.start_action.is_none());
+    }
 }
 
 #[derive(Deserialize)]
@@ -506,7 +675,7 @@ pub async fn bot_register(
     State(state): State<AdminState>,
     Path(bot_id): Path<String>,
 ) -> Result<Response, Response> {
-    let qr_url = state.qr_store.get(&bot_id).unwrap_or_default();
+    let qr_url = state.qr_store.get(&bot_id, state.qr_expire_secs).unwrap_or_default();
     let qr_image_url = if qr_url.is_empty() {
         String::new()
     } else {

@@ -1,6 +1,7 @@
 use crate::admin::handlers::{
-    bot_create_form, bot_create_submit, bot_detail, bot_history, bot_list, bot_register,
-    bot_start, bot_stop, dashboard, healthz, overview_json, root_redirect,
+    bot_create_form, bot_create_submit, bot_delete, bot_detail, bot_detail_status_json,
+    bot_history, bot_list, bot_register, bot_start, bot_stop, dashboard, healthz,
+    overview_json, root_redirect,
 };
 use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
@@ -20,7 +21,15 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 pub fn admin_router(pool: PgPool) -> Router {
-    admin_router_with_runtime(pool, None, QrUrlStore::new(), "127.0.0.1".to_string(), 8787)
+    admin_router_with_runtime(
+        pool,
+        None,
+        QrUrlStore::new(),
+        "127.0.0.1".to_string(),
+        8787,
+        3600,
+        3600,
+    )
 }
 
 pub fn admin_router_with_runtime(
@@ -29,13 +38,17 @@ pub fn admin_router_with_runtime(
     qr_store: QrUrlStore,
     admin_host: String,
     admin_port: u16,
+    session_online_timeout_secs: u64,
+    qr_expire_secs: u64,
 ) -> Router {
     let state = AdminState {
-        repo: AdminRepository::new(pool),
+        repo: AdminRepository::new(pool, session_online_timeout_secs as i64),
         runtime,
         qr_store,
         admin_host,
         admin_port,
+        session_online_timeout_secs,
+        qr_expire_secs,
     };
     let static_dir = static_dir();
     let admin = Router::new()
@@ -43,10 +56,12 @@ pub fn admin_router_with_runtime(
         .route("/bots", get(bot_list).post(bot_create_submit))
         .route("/bots/create", get(bot_create_form))
         .route("/bots/{bot_id}", get(bot_detail))
-        .route("/bots/{session_id}/start", post(bot_start))
-        .route("/bots/{session_id}/stop", post(bot_stop))
+        .route("/bots/{bot_id}/start", post(bot_start))
+        .route("/bots/{bot_id}/stop", post(bot_stop))
+        .route("/bots/{bot_id}/delete", post(bot_delete))
         .route("/bots/{session_id}/history", get(bot_history))
         .route("/api/overview", get(overview_json))
+        .route("/api/bots/{bot_id}/status", get(bot_detail_status_json))
         .with_state(state.clone());
 
     let public = Router::new()
@@ -71,7 +86,15 @@ pub async fn run_admin_server(config: AppConfig) -> Result<()> {
     let runtime = Arc::new(MultiBotRuntime::from_config(config.clone()).await?);
     let bind = std::env::var("WECHATBOT_ADMIN_BIND").unwrap_or(config.admin.bind.clone());
     let (host, port) = parse_bind(&bind);
-    let app = admin_router_with_runtime(pool, Some(runtime), QrUrlStore::new(), host, port);
+    let app = admin_router_with_runtime(
+        pool,
+        Some(runtime),
+        QrUrlStore::new(),
+        host,
+        port,
+        config.runtime.session_online_timeout_secs,
+        config.runtime.qr_expire_secs,
+    );
     serve_bind(app, &bind).await
 }
 

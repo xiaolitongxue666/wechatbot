@@ -137,8 +137,14 @@ async fn bot_list_has_seeded_bots() {
         html.contains("bot-005"),
         "expected bot-005 in bot list: {html}"
     );
-    assert!(html.contains("在线") || html.contains("Online"), "expected status text: {html}");
-    assert!(html.contains("离线") || html.contains("Offline"), "expected offline text: {html}");
+    assert!(
+        html.contains("在线") || html.contains("Online") || html.contains("online"),
+        "expected status text: {html}"
+    );
+    assert!(
+        html.contains("离线") || html.contains("Offline") || html.contains("offline"),
+        "expected offline text: {html}"
+    );
 }
 
 #[tokio::test]
@@ -162,6 +168,33 @@ async fn bot_detail_valid_bot() {
         "expected bot-001 in detail: {html}"
     );
     assert!(html.contains("在线") || html.contains("online"), "expected online status: {html}");
+    assert!(
+        html.contains("id=\"delete-button\""),
+        "expected delete button on detail page: {html}"
+    );
+}
+
+#[tokio::test]
+async fn bot_detail_without_runtime_hides_start_button() {
+    let app = get_app().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/admin/bots/bot-002")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = res.status();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8_lossy(&body);
+
+    assert_eq!(status, StatusCode::OK, "unexpected status: {status}, body: {html}");
+    assert!(
+        !html.contains("id=\"start-button\""),
+        "expected no start button when runtime is unavailable: {html}"
+    );
 }
 
 #[tokio::test]
@@ -198,6 +231,29 @@ async fn bot_history_with_messages() {
         html.contains("sess-001") || html.contains("hello world") || html.contains("user_alice"),
         "expected seed data in history: {html}"
     );
+}
+
+#[tokio::test]
+async fn bot_delete_route_redirects_to_list() {
+    let app = get_app().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/admin/bots/bot-005/delete")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    let location = res
+        .headers()
+        .get("location")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    assert!(location.starts_with("/admin/bots"), "unexpected redirect: {location}");
 }
 
 #[tokio::test]

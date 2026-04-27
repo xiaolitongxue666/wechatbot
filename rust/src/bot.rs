@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
@@ -24,6 +25,9 @@ pub struct BotOptions {
     pub cred_path: Option<String>,
     pub on_qr_url: Option<Box<dyn Fn(&str) + Send + Sync>>,
     pub on_error: Option<Box<dyn Fn(&WeChatBotError) + Send + Sync>>,
+    pub context_expire_secs: u64,
+    pub typing_keepalive_secs: u64,
+    pub typing_trigger_ms: u64,
 }
 
 impl Default for BotOptions {
@@ -33,15 +37,24 @@ impl Default for BotOptions {
             cred_path: None,
             on_qr_url: None,
             on_error: None,
+            context_expire_secs: 3600,
+            typing_keepalive_secs: 3600,
+            typing_trigger_ms: 1000,
         }
     }
+}
+
+#[derive(Clone)]
+struct ContextState {
+    context_token: String,
+    updated_at_secs: u64,
 }
 
 /// WeChatBot is the main entry point.
 pub struct WeChatBot {
     client: Arc<ILinkClient>,
     credentials: RwLock<Option<Credentials>>,
-    context_tokens: RwLock<HashMap<String, String>>,
+    context_tokens: RwLock<HashMap<String, ContextState>>,
     handlers: Mutex<Vec<MessageHandler>>,
     cursor: RwLock<String>,
     base_url: RwLock<String>,
@@ -49,6 +62,9 @@ pub struct WeChatBot {
     stopped: RwLock<bool>,
     on_qr_url: Option<Box<dyn Fn(&str) + Send + Sync>>,
     on_error: Option<Box<dyn Fn(&WeChatBotError) + Send + Sync>>,
+    context_expire_secs: u64,
+    typing_keepalive_secs: u64,
+    typing_trigger_ms: u64,
 }
 
 impl WeChatBot {
@@ -68,6 +84,9 @@ impl WeChatBot {
             stopped: RwLock::new(false),
             on_qr_url: opts.on_qr_url,
             on_error: opts.on_error,
+            context_expire_secs: opts.context_expire_secs,
+            typing_keepalive_secs: opts.typing_keepalive_secs,
+            typing_trigger_ms: opts.typing_trigger_ms,
         }
     }
 
@@ -75,6 +94,14 @@ impl WeChatBot {
     pub async fn set_credentials(&self, creds: &Credentials) {
         *self.credentials.write().await = Some(creds.clone());
         *self.base_url.write().await = creds.base_url.clone();
+    }
+
+    pub fn typing_keepalive_secs(&self) -> u64 {
+        self.typing_keepalive_secs
+    }
+
+    pub fn typing_trigger_ms(&self) -> u64 {
+        self.typing_trigger_ms
     }
 
     /// Login via QR code. Returns credentials on success.
@@ -150,25 +177,39 @@ impl WeChatBot {
         self.context_tokens
             .write()
             .await
-            .insert(msg.user_id.clone(), msg.context_token.clone());
+            .insert(
+                msg.user_id.clone(),
+                ContextState {
+                    context_token: msg.context_token.clone(),
+                    updated_at_secs: now_secs(),
+                },
+            );
         self.send_text(&msg.user_id, text, &msg.context_token).await
     }
 
     /// Send text to a user (needs prior context_token).
     pub async fn send(&self, user_id: &str, text: &str) -> Result<()> {
-        let ct = self.context_tokens.read().await.get(user_id).cloned();
-        let ct = ct.ok_or_else(|| WeChatBotError::NoContext(user_id.to_string()))?;
+        let ct = self.valid_context_token(user_id).await?;
         self.send_text(user_id, text, &ct).await
     }
 
     /// Show "typing..." indicator.
     pub async fn send_typing(&self, user_id: &str) -> Result<()> {
-        let ct = self.context_tokens.read().await.get(user_id).cloned();
-        let ct = ct.ok_or_else(|| WeChatBotError::NoContext(user_id.to_string()))?;
+        let ct = self.valid_context_token(user_id).await?;
         let (base_url, token) = self.get_auth().await?;
         let config = self.client.get_config(&base_url, &token, user_id, &ct).await?;
         if let Some(ticket) = config.typing_ticket {
             self.client.send_typing(&base_url, &token, user_id, &ticket, 1).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn stop_typing(&self, user_id: &str) -> Result<()> {
+        let ct = self.valid_context_token(user_id).await?;
+        let (base_url, token) = self.get_auth().await?;
+        let config = self.client.get_config(&base_url, &token, user_id, &ct).await?;
+        if let Some(ticket) = config.typing_ticket {
+            self.client.send_typing(&base_url, &token, user_id, &ticket, 0).await?;
         }
         Ok(())
     }
@@ -178,14 +219,19 @@ impl WeChatBot {
         self.context_tokens
             .write()
             .await
-            .insert(msg.user_id.clone(), msg.context_token.clone());
+            .insert(
+                msg.user_id.clone(),
+                ContextState {
+                    context_token: msg.context_token.clone(),
+                    updated_at_secs: now_secs(),
+                },
+            );
         self.send_content(&msg.user_id, &msg.context_token, content).await
     }
 
     /// Send any content type to a user (needs prior context_token).
     pub async fn send_media(&self, user_id: &str, content: SendContent) -> Result<()> {
-        let ct = self.context_tokens.read().await.get(user_id).cloned();
-        let ct = ct.ok_or_else(|| WeChatBotError::NoContext(user_id.to_string()))?;
+        let ct = self.valid_context_token(user_id).await?;
         self.send_content(user_id, &ct, content).await
     }
 
@@ -486,8 +532,28 @@ impl WeChatBot {
             self.context_tokens
                 .write()
                 .await
-                .insert(user_id.clone(), wire.context_token.clone());
+                .insert(
+                    user_id.clone(),
+                    ContextState {
+                        context_token: wire.context_token.clone(),
+                        updated_at_secs: now_secs(),
+                    },
+                );
         }
+    }
+
+    async fn valid_context_token(&self, user_id: &str) -> Result<String> {
+        let state = self.context_tokens.read().await.get(user_id).cloned();
+        let Some(state) = state else {
+            return Err(WeChatBotError::NoContext(user_id.to_string()));
+        };
+        if self.context_expire_secs > 0
+            && now_secs().saturating_sub(state.updated_at_secs) > self.context_expire_secs
+        {
+            self.context_tokens.write().await.remove(user_id);
+            return Err(WeChatBotError::NoContext(user_id.to_string()));
+        }
+        Ok(state.context_token)
     }
 
     async fn get_auth(&self) -> Result<(String, String)> {
@@ -700,10 +766,17 @@ fn default_cred_path() -> String {
 
 fn chrono_now() -> String {
     // Simple ISO 8601 without chrono dependency
-    let dur = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let dur = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap();
     format!("{}Z", dur.as_secs())
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

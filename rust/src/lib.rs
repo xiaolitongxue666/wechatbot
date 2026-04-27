@@ -36,7 +36,7 @@ pub mod types;
 
 pub use admin::{admin_router, admin_router_with_runtime, run_admin_repository_pool, run_admin_server};
 pub use bot::{BotOptions, MessageHandler, SendContent, WeChatBot};
-pub use config::{AdminConfig, AppConfig, DatabaseMode};
+pub use config::{AdminConfig, AppConfig, DatabaseMode, RuntimeConfig};
 pub use crypto::{decrypt_aes_ecb, decrypt_aes_ecb as download_decrypt, encode_aes_key_base64, encode_aes_key_hex, encrypt_aes_ecb, generate_aes_key, decode_aes_key};
 pub use error::{Result, WeChatBotError};
 pub use forwarder::{ForwardEvent, ForwarderWorker};

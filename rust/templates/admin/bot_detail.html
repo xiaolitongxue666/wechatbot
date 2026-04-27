@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ i18n.page_bot_detail }}</title>
   <link rel="stylesheet" href="/static/admin/style.css">
-  {% if has_runtime && qr_url.is_empty() && !is_online %}
-  <meta http-equiv="refresh" content="2">
-  {% endif %}
+  
 </head>
 <body class="theme-{{ prefs.theme }}">
 <div class="page">
@@ -32,18 +30,18 @@
     <dl class="kv">
       <dt>{{ i18n.col_bot_id }}</dt><dd class="mono">{{ bot_id }}</dd>
       <dt>{{ i18n.col_status }}</dt>
-      <dd>
+      <dd id="bot-status-cell">
         {% if bot_status == "Online" || bot_status == "online" %}
-        <span class="status-pill status-online">{{ bot_status }}</span>
+        <span id="bot-status-pill" class="status-pill status-online">{{ bot_status }}</span>
         {% else if bot_status == "Offline" || bot_status == "offline" %}
-        <span class="status-pill status-offline">{{ bot_status }}</span>
+        <span id="bot-status-pill" class="status-pill status-offline">{{ bot_status }}</span>
         {% else if bot_status == "Expired" || bot_status == "expired" %}
-        <span class="status-pill status-expired">{{ bot_status }}</span>
+        <span id="bot-status-pill" class="status-pill status-expired">{{ bot_status }}</span>
         {% else %}
-        <span class="status-pill status-default">{{ bot_status }}</span>
+        <span id="bot-status-pill" class="status-pill status-default">{{ bot_status }}</span>
         {% endif %}
       </dd>
-      <dt>{{ i18n.col_heartbeat }}</dt><dd>{{ heartbeat_display }}</dd>
+      <dt>{{ i18n.col_heartbeat }}</dt><dd id="bot-heartbeat">{{ heartbeat_display }}</dd>
       <dt>{{ i18n.col_updated }}</dt><dd>{{ updated_display }}</dd>
       <dt>created</dt><dd>{{ created_display }}</dd>
     </dl>
@@ -51,11 +49,17 @@
 
   {% if has_runtime %}
   <div class="actions-row">
+    <form id="start-form" method="POST" action="{% if start_action.is_some() %}{{ start_action.as_ref().unwrap() }}{% else %}#{% endif %}" style="display:inline">
+      <button id="start-button" type="submit" class="btn" {% if !can_start %}disabled{% endif %}>启动</button>
+    </form>
     {% if is_online %}
-    <form method="POST" action="/admin/bots/{{ bot_id }}/stop" style="display:inline">
-      <button type="submit" class="btn danger">{{ i18n.btn_stop }}</button>
+    <form id="stop-form" method="POST" action="/admin/bots/{{ bot_id }}/stop" style="display:inline">
+      <button id="stop-button" type="submit" class="btn danger">{{ i18n.btn_stop }}</button>
     </form>
     {% endif %}
+    <form method="POST" action="/admin/bots/{{ bot_id }}/delete?{{ prefs.query_suffix() }}" style="display:inline" onsubmit="return confirm('确认删除该 Bot 及其关联数据？此操作不可恢复。');">
+      <button id="delete-button" type="submit" class="btn danger">删除</button>
+    </form>
     <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
   </div>
 
@@ -66,12 +70,12 @@
       <input type="text" class="mono register-link-input" value="{{ register_link }}" readonly onclick="this.select()">
     </div>
     {% if !qr_url.is_empty() %}
-    <div class="qr-section">
+    <div id="qr-section" class="qr-section">
       <img src="{{ qr_image_url }}" alt="Login QR Code" class="qr-img" width="220" height="220">
       <p class="muted mono" style="word-break:break-all"><a href="{{ qr_url }}" target="_blank">{{ qr_url }}</a></p>
     </div>
     {% else if !is_online %}
-    <p class="muted qr-waiting">{{ i18n.qr_waiting }}</p>
+    <p id="qr-waiting" class="muted qr-waiting">{{ i18n.qr_waiting }}</p>
     {% endif %}
   </section>
 
@@ -101,11 +105,82 @@
   </section>
   {% endif %}
   {% else %}
-  <p class="actions-row">
+  <div class="actions-row">
+    <form method="POST" action="/admin/bots/{{ bot_id }}/delete?{{ prefs.query_suffix() }}" style="display:inline" onsubmit="return confirm('确认删除该 Bot 及其关联数据？此操作不可恢复。');">
+      <button id="delete-button" type="submit" class="btn danger">删除</button>
+    </form>
     <a class="btn" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
-  </p>
+  </div>
   {% endif %}
 </main>
 </div>
+{% if has_runtime %}
+<script>
+(() => {
+  const botId = '{{ bot_id }}';
+  const statusUrl = `/admin/api/bots/${encodeURIComponent(botId)}/status`;
+  const statusPill = document.getElementById('bot-status-pill');
+  const heartbeatNode = document.getElementById('bot-heartbeat');
+  const startForm = document.getElementById('start-form');
+  const startButton = document.getElementById('start-button');
+  let previousIsOnline = {% if is_online %}true{% else %}false{% endif %};
+  let previousHasQrUrl = {% if !qr_url.is_empty() %}true{% else %}false{% endif %};
+
+  if (!statusPill || !heartbeatNode || !startForm || !startButton) {
+    return;
+  }
+
+  const classByStatus = (statusText) => {
+    const value = (statusText || '').toLowerCase();
+    if (value === 'online') return 'status-pill status-online';
+    if (value === 'offline') return 'status-pill status-offline';
+    if (value === 'expired') return 'status-pill status-expired';
+    return 'status-pill status-default';
+  };
+
+  const updateUi = (payload) => {
+    if (!payload) return;
+    statusPill.textContent = payload.status;
+    statusPill.className = classByStatus(payload.status);
+    heartbeatNode.textContent = payload.heartbeat_display;
+
+    if (payload.can_start && payload.start_action) {
+      startButton.disabled = false;
+      startForm.action = payload.start_action;
+    } else {
+      startButton.disabled = true;
+      startForm.action = '#';
+    }
+
+    const isNowOnline = Boolean(payload.is_online);
+    const hasQrUrlNow = Boolean(payload.has_qr_url);
+
+    if (isNowOnline && !previousIsOnline) {
+      window.location.reload();
+      return;
+    }
+
+    if (hasQrUrlNow && !previousHasQrUrl) {
+      window.location.reload();
+      return;
+    }
+
+    previousIsOnline = isNowOnline;
+    previousHasQrUrl = hasQrUrlNow;
+  };
+
+  const poll = async () => {
+    try {
+      const response = await fetch(statusUrl, { cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json();
+      updateUi(payload);
+    } catch (_error) {}
+  };
+
+  setInterval(poll, 2000);
+})();
+</script>
+{% endif %}
 </body>
 </html>
