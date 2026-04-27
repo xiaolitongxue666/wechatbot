@@ -1,6 +1,6 @@
 use crate::admin::handlers::{
-    bot_create_form, bot_create_submit, bot_detail, bot_history, bot_list, bot_start, bot_stop,
-    dashboard, healthz, overview_json, root_redirect,
+    bot_create_form, bot_create_submit, bot_detail, bot_history, bot_list, bot_register,
+    bot_start, bot_stop, dashboard, healthz, overview_json, root_redirect,
 };
 use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
@@ -20,35 +20,44 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 pub fn admin_router(pool: PgPool) -> Router {
-    admin_router_with_runtime(pool, None, QrUrlStore::new())
+    admin_router_with_runtime(pool, None, QrUrlStore::new(), "127.0.0.1".to_string(), 8787)
 }
 
 pub fn admin_router_with_runtime(
     pool: PgPool,
     runtime: Option<Arc<MultiBotRuntime>>,
     qr_store: QrUrlStore,
+    admin_host: String,
+    admin_port: u16,
 ) -> Router {
     let state = AdminState {
         repo: AdminRepository::new(pool),
         runtime,
         qr_store,
+        admin_host,
+        admin_port,
     };
     let static_dir = static_dir();
     let admin = Router::new()
         .route("/", get(dashboard))
         .route("/bots", get(bot_list).post(bot_create_submit))
         .route("/bots/create", get(bot_create_form))
-        .route("/bots/{session_id}", get(bot_detail))
+        .route("/bots/{bot_id}", get(bot_detail))
         .route("/bots/{session_id}/start", post(bot_start))
         .route("/bots/{session_id}/stop", post(bot_stop))
         .route("/bots/{session_id}/history", get(bot_history))
         .route("/api/overview", get(overview_json))
+        .with_state(state.clone());
+
+    let public = Router::new()
+        .route("/bot/{bot_id}", get(bot_register))
         .with_state(state);
 
     Router::new()
         .route("/", get(root_redirect))
         .route("/healthz", get(healthz))
         .nest("/admin", admin)
+        .merge(public)
         .nest_service("/static", ServeDir::new(static_dir))
         .layer(TraceLayer::new_for_http())
 }
@@ -60,8 +69,9 @@ pub async fn run_admin_server(config: AppConfig) -> Result<()> {
         .pool()
         .clone();
     let runtime = Arc::new(MultiBotRuntime::from_config(config.clone()).await?);
-    let app = admin_router_with_runtime(pool, Some(runtime), QrUrlStore::new());
     let bind = std::env::var("WECHATBOT_ADMIN_BIND").unwrap_or(config.admin.bind.clone());
+    let (host, port) = parse_bind(&bind);
+    let app = admin_router_with_runtime(pool, Some(runtime), QrUrlStore::new(), host, port);
     serve_bind(app, &bind).await
 }
 
@@ -121,4 +131,14 @@ fn static_dir() -> PathBuf {
         return PathBuf::from(dir);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static")
+}
+
+fn parse_bind(bind: &str) -> (String, u16) {
+    let default_port = 8787;
+    if let Some((host, port_str)) = bind.rsplit_once(':') {
+        let port = port_str.parse::<u16>().unwrap_or(default_port);
+        (host.to_string(), port)
+    } else {
+        (bind.to_string(), default_port)
+    }
 }

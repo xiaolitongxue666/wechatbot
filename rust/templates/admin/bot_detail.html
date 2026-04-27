@@ -10,6 +10,7 @@
   {% endif %}
 </head>
 <body class="theme-{{ prefs.theme }}">
+<div class="page">
 <header class="topbar">
   <div class="brand">WeChat Bot Admin</div>
   <nav class="nav">
@@ -18,56 +19,93 @@
   </nav>
   <div class="prefs">
     <span class="muted">{{ i18n.lang_label }}</span>
-    <a href="/admin/bots/{{ bot.session_id }}?lang=zh&amp;theme={{ prefs.theme }}">{{ i18n.lang_zh }}</a>
-    <a href="/admin/bots/{{ bot.session_id }}?lang=en&amp;theme={{ prefs.theme }}">{{ i18n.lang_en }}</a>
+    <a href="/admin/bots/{{ bot_id }}?lang=zh&amp;theme={{ prefs.theme }}">{{ i18n.lang_zh }}</a>
+    <a href="/admin/bots/{{ bot_id }}?lang=en&amp;theme={{ prefs.theme }}">{{ i18n.lang_en }}</a>
     <span class="muted">{{ i18n.theme_label }}</span>
-    <a href="/admin/bots/{{ bot.session_id }}?lang={{ prefs.lang }}&amp;theme=dark">{{ i18n.theme_dark }}</a>
-    <a href="/admin/bots/{{ bot.session_id }}?lang={{ prefs.lang }}&amp;theme=light">{{ i18n.theme_light }}</a>
+    <a href="/admin/bots/{{ bot_id }}?lang={{ prefs.lang }}&amp;theme=dark">{{ i18n.theme_dark }}</a>
+    <a href="/admin/bots/{{ bot_id }}?lang={{ prefs.lang }}&amp;theme=light">{{ i18n.theme_light }}</a>
   </div>
 </header>
 
 <main class="main detail">
-  <dl class="kv">
-    <dt>{{ i18n.col_session_id }}</dt><dd class="mono">{{ bot.session_id }}</dd>
-    <dt>{{ i18n.col_tenant }}</dt><dd>{{ bot.tenant_id }}</dd>
-    <dt>{{ i18n.col_owner }}</dt><dd>{{ bot.owner_id }}</dd>
-    <dt>wx_user_id</dt><dd>{{ wx_user_display }}</dd>
-    <dt>{{ i18n.col_status }}</dt><dd>{{ runtime_status }}</dd>
-    <dt>{{ i18n.col_heartbeat }}</dt><dd>{{ heartbeat_display }}</dd>
-    <dt>{{ i18n.col_updated }}</dt><dd>{{ updated_display }}</dd>
-    <dt>created</dt><dd>{{ created_display }}</dd>
-  </dl>
+  <section class="panel detail-panel">
+    <dl class="kv">
+      <dt>{{ i18n.col_bot_id }}</dt><dd class="mono">{{ bot_id }}</dd>
+      <dt>{{ i18n.col_status }}</dt>
+      <dd>
+        {% if bot_status == "Online" || bot_status == "online" %}
+        <span class="status-pill status-online">{{ bot_status }}</span>
+        {% else if bot_status == "Offline" || bot_status == "offline" %}
+        <span class="status-pill status-offline">{{ bot_status }}</span>
+        {% else if bot_status == "Expired" || bot_status == "expired" %}
+        <span class="status-pill status-expired">{{ bot_status }}</span>
+        {% else %}
+        <span class="status-pill status-default">{{ bot_status }}</span>
+        {% endif %}
+      </dd>
+      <dt>{{ i18n.col_heartbeat }}</dt><dd>{{ heartbeat_display }}</dd>
+      <dt>{{ i18n.col_updated }}</dt><dd>{{ updated_display }}</dd>
+      <dt>created</dt><dd>{{ created_display }}</dd>
+    </dl>
+  </section>
 
   {% if has_runtime %}
   <div class="actions-row">
     {% if is_online %}
-    <form method="POST" action="/admin/bots/{{ bot.session_id }}/stop" style="display:inline">
-      <button type="submit" class="btn" style="background:#e74c3c">{{ i18n.btn_stop }}</button>
-    </form>
-    {% else %}
-    <form method="POST" action="/admin/bots/{{ bot.session_id }}/start" style="display:inline">
-      <button type="submit" class="btn">{{ i18n.btn_start }}</button>
+    <form method="POST" action="/admin/bots/{{ bot_id }}/stop" style="display:inline">
+      <button type="submit" class="btn danger">{{ i18n.btn_stop }}</button>
     </form>
     {% endif %}
-    <a class="btn secondary" href="/admin/bots/{{ bot.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a>
     <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
   </div>
 
-  {% if !qr_url.is_empty() %}
-  <div class="qr-section">
-    <h3>{{ i18n.qr_scan_prompt }}</h3>
-    <img src="{{ qr_image_url }}" alt="Login QR Code" class="qr-img" width="220" height="220">
-    <p class="muted mono" style="word-break:break-all;max-width:400px"><a href="{{ qr_url }}" target="_blank">{{ qr_url }}</a></p>
-  </div>
-  {% else if !is_online %}
-  <p class="muted qr-waiting">{{ i18n.qr_waiting }}</p>
+  <section class="panel qr-panel">
+    <h3>{{ i18n.register_title }}</h3>
+    <div class="register-link-row">
+      <label>{{ i18n.register_link_label }}</label>
+      <input type="text" class="mono register-link-input" value="{{ register_link }}" readonly onclick="this.select()">
+    </div>
+    {% if !qr_url.is_empty() %}
+    <div class="qr-section">
+      <img src="{{ qr_image_url }}" alt="Login QR Code" class="qr-img" width="220" height="220">
+      <p class="muted mono" style="word-break:break-all"><a href="{{ qr_url }}" target="_blank">{{ qr_url }}</a></p>
+    </div>
+    {% else if !is_online %}
+    <p class="muted qr-waiting">{{ i18n.qr_waiting }}</p>
+    {% endif %}
+  </section>
+
+  {% if !sessions.is_empty() %}
+  <section class="panel sessions-panel">
+    <h3>{{ i18n.sessions_title }}</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>{{ i18n.col_user_id }}</th>
+          <th>{{ i18n.col_status }}</th>
+          <th>{{ i18n.col_created }}</th>
+          <th>{{ i18n.action_history }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in sessions %}
+        <tr>
+          <td class="mono">{{ session.user_id }}</td>
+          <td>{{ session.status }}</td>
+          <td>{{ session.created_at }}</td>
+          <td><a href="/admin/bots/{{ session.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
   {% endif %}
   {% else %}
   <p class="actions-row">
-    <a class="btn" href="/admin/bots/{{ bot.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a>
-    <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
+    <a class="btn" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
   </p>
   {% endif %}
 </main>
+</div>
 </body>
 </html>

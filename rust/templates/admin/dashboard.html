@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/admin/style.css">
 </head>
 <body class="theme-{{ prefs.theme }}">
+<div class="page">
 <header class="topbar">
   <div class="brand">WeChat Bot Admin</div>
   <nav class="nav">
@@ -23,21 +24,47 @@
   </div>
 </header>
 
-<section class="overview">
-  <div class="card"><div class="label">{{ i18n.overview_total_bots }}</div><div class="value">{{ overview.total_bots }}</div></div>
-  <div class="card"><div class="label">{{ i18n.overview_online_bots }}</div><div class="value">{{ overview.online_bots }}</div></div>
-  <div class="card"><div class="label">{{ i18n.overview_last_heartbeat }}</div><div class="value">{{ last_heartbeat_display }}</div></div>
-  <div class="card"><div class="label">{{ i18n.overview_messages_today }}</div><div class="value">{{ overview.messages_today }}</div></div>
-  <div class="card"><div class="label">{{ i18n.overview_dlq }}</div><div class="value">{{ overview.forward_dlq_count }}</div></div>
-  <div class="card"><div class="label">{{ i18n.overview_forward_pending }}</div><div class="value">{{ overview.forward_not_success_count }}</div></div>
-</section>
-
 <main class="main">
-  <p class="muted"><a href="/admin/bots?{{ prefs.query_suffix() }}">{{ i18n.nav_bots }} →</a></p>
+  <div class="page-actions">
+    <a class="btn" href="/admin/bots/create?{{ prefs.query_suffix() }}">{{ i18n.action_new_bot }}</a>
+  </div>
+
+  <section class="overview">
+    <div class="card">
+      <div class="label">{{ i18n.overview_total_bots }}</div>
+      <div class="value">{{ overview.total_bots }}</div>
+    </div>
+    <div class="card">
+      <div class="label">{{ i18n.overview_online_bots }}</div>
+      <div class="value">{{ overview.online_bots }}</div>
+    </div>
+    <div class="card soft">
+      <div class="label">{{ i18n.overview_last_heartbeat }}</div>
+      <div class="value mono" style="font-size:1.45rem">{{ last_heartbeat_display }}</div>
+    </div>
+    <div class="card">
+      <div class="label">{{ i18n.overview_messages_today }}</div>
+      <div class="value">{{ overview.messages_today }}</div>
+    </div>
+    <div class="card soft">
+      <div class="label">{{ i18n.overview_dlq }}</div>
+      <div class="value">{{ overview.forward_dlq_count }}</div>
+    </div>
+    <div class="card soft">
+      <div class="label">{{ i18n.overview_forward_pending }}</div>
+      <div class="value">{{ overview.forward_not_success_count }}</div>
+    </div>
+  </section>
+
+  <h2 class="section-title"><a href="/admin/bots?{{ prefs.query_suffix() }}">{{ i18n.nav_bots }} →</a></h2>
+  <section class="panel empty-hint">
+    <span class="muted">{{ i18n.nav_bots }}</span>
+  </section>
 </main>
 
 <footer class="footer muted">
   <a href="/healthz">healthz</a> · <a href="/admin/api/overview">overview json</a>
 </footer>
+</div>
 </body>
 </html>

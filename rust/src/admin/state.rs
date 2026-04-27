@@ -8,4 +8,12 @@ pub struct AdminState {
     pub repo: AdminRepository,
     pub runtime: Option<Arc<MultiBotRuntime>>,
     pub qr_store: QrUrlStore,
+    pub admin_host: String,
+    pub admin_port: u16,
+}
+
+impl AdminState {
+    pub fn register_link(&self, bot_id: &str) -> String {
+        format!("http://{}:{}/bot/{}", self.admin_host, self.admin_port, bot_id)
+    }
 }

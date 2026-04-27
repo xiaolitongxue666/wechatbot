@@ -1,16 +1,14 @@
-use crate::admin::repository::{AdminOverview, BotSessionRow};
+use crate::admin::repository::AdminOverview;
 use crate::admin::state::AdminState;
 use crate::admin::ui::{i18n, I18n, UiPrefs, UiQuery};
-use crate::bot::{BotOptions, WeChatBot};
 use askama::Template;
-use axum::extract::{Form, Path, Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Json;
 use axum_extra::extract::CookieJar;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 fn format_dt_opt(dt: &Option<DateTime<Utc>>) -> String {
     dt.map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
@@ -101,12 +99,10 @@ pub async fn dashboard(
 }
 
 struct BotListRowVm {
-    session_id: String,
-    tenant_id: String,
-    owner_id: String,
+    bot_id: String,
+    status: String,
     last_heartbeat: String,
     updated_at: String,
-    runtime_status: String,
 }
 
 #[derive(Template)]
@@ -127,12 +123,12 @@ pub async fn bot_list(
 ) -> Result<Response, Response> {
     let prefs = UiPrefs::resolve(q.clone(), &jar);
     let jar = UiPrefs::apply_cookies_from_query(&q, jar);
-    let rows_db = state.repo.list_sessions().await.map_err(internal_error)?;
+    let rows_db = state.repo.list_bots().await.map_err(internal_error)?;
     let has_runtime = state.runtime.is_some();
     let mut rows = Vec::with_capacity(rows_db.len());
     for row in rows_db {
         let runtime_status = if let Some(ref rt) = state.runtime {
-            match rt.session_manager.status_of(&row.session_id).await {
+            match rt.session_manager.status_of(&row.bot_id).await {
                 Some(s) => format!("{:?}", s),
                 None => row.status.clone(),
             }
@@ -140,12 +136,10 @@ pub async fn bot_list(
             row.status.clone()
         };
         rows.push(BotListRowVm {
-            session_id: row.session_id,
-            tenant_id: row.tenant_id,
-            owner_id: row.owner_id,
+            bot_id: row.bot_id,
+            status: runtime_status,
             last_heartbeat: format_dt_opt(&row.last_heartbeat_at),
             updated_at: format_dt(row.updated_at),
-            runtime_status,
         });
     }
     let i = i18n(&prefs.lang);
@@ -161,6 +155,13 @@ pub async fn bot_list(
     Ok((jar, Html(html)).into_response())
 }
 
+struct SessionRowVm {
+    session_id: String,
+    user_id: String,
+    status: String,
+    created_at: String,
+}
+
 #[derive(Template)]
 #[template(path = "admin/bot_detail.html")]
 struct BotDetailTpl<'a> {
@@ -168,48 +169,38 @@ struct BotDetailTpl<'a> {
     prefs: &'a UiPrefs,
     lang_attr: &'a str,
     nav_active: &'a str,
-    bot: &'a BotSessionRow,
-    wx_user_display: String,
+    bot_id: &'a str,
+    bot_status: &'a str,
     heartbeat_display: String,
     created_display: String,
     updated_display: String,
     qr_url: String,
     qr_image_url: String,
+    register_link: String,
     has_runtime: bool,
     is_online: bool,
-    runtime_status: String,
+    sessions: &'a [SessionRowVm],
 }
 
 pub async fn bot_detail(
     State(state): State<AdminState>,
-    Path(session_id): Path<String>,
+    Path(bot_id): Path<String>,
     Query(q): Query<UiQuery>,
     jar: CookieJar,
 ) -> Result<Response, Response> {
     let prefs = UiPrefs::resolve(q.clone(), &jar);
     let jar = UiPrefs::apply_cookies_from_query(&q, jar);
-    let bot = state
-        .repo
-        .get_session(&session_id)
-        .await
-        .map_err(internal_error)?;
+    let bot = state.repo.get_bot(&bot_id).await.map_err(internal_error)?;
     let Some(bot) = bot else {
         let i = i18n(&prefs.lang);
         return Ok((
             jar,
             (StatusCode::NOT_FOUND, Html(not_found_html(&i, &prefs))),
-        )
-            .into_response());
+        ).into_response());
     };
     let i = i18n(&prefs.lang);
-    let wx_user_display = bot
-        .wx_user_id
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .unwrap_or("—")
-        .to_string();
 
-    let qr_url = state.qr_store.get(&session_id);
+    let qr_url = state.qr_store.get(&bot_id);
     let qr_image_url = qr_url
         .as_ref()
         .map(|url| {
@@ -220,9 +211,11 @@ pub async fn bot_detail(
         })
         .unwrap_or_default();
 
+    let register_link = state.register_link(&bot_id);
+
     let has_runtime = state.runtime.is_some();
     let (is_online, runtime_status) = if let Some(ref rt) = state.runtime {
-        let status = rt.session_manager.status_of(&session_id).await;
+        let status = rt.session_manager.status_of(&bot_id).await;
         let s = match status {
             Some(crate::session::SessionStatus::Online) => "Online".to_string(),
             Some(s) => format!("{:?}", s),
@@ -236,31 +229,36 @@ pub async fn bot_detail(
         (bot.status == "online", bot.status.clone())
     };
 
+    let sessions_db = state.repo.list_sessions(&bot_id).await.map_err(internal_error)?;
+    let sessions: Vec<SessionRowVm> = sessions_db
+        .iter()
+        .map(|s| SessionRowVm {
+            session_id: s.session_id.clone(),
+            user_id: s.user_id.clone(),
+            status: s.status.clone(),
+            created_at: format_dt(s.created_at),
+        })
+        .collect();
+
     let page = BotDetailTpl {
         i18n: i,
         prefs: &prefs,
         lang_attr: if prefs.lang == "en" { "en" } else { "zh-CN" },
         nav_active: "bots",
-        bot: &bot,
-        wx_user_display,
+        bot_id: &bot_id,
+        bot_status: &runtime_status,
         heartbeat_display: format_dt_opt(&bot.last_heartbeat_at),
         created_display: format_dt(bot.created_at),
         updated_display: format_dt(bot.updated_at),
         qr_url: qr_url.unwrap_or_default(),
         qr_image_url,
+        register_link,
         has_runtime,
         is_online,
-        runtime_status,
+        sessions: &sessions,
     };
     let html = page.render().map_err(internal_error)?;
     Ok((jar, Html(html)).into_response())
-}
-
-#[derive(Deserialize)]
-pub struct CreateBotForm {
-    pub tenant_id: String,
-    pub owner_id: String,
-    pub session_id: String,
 }
 
 #[derive(Template)]
@@ -295,7 +293,6 @@ pub async fn bot_create_form(
 
 pub async fn bot_create_submit(
     State(state): State<AdminState>,
-    Form(form): Form<CreateBotForm>,
 ) -> Result<Response, Response> {
     let prefs = UiPrefs::default();
     let i = i18n(&prefs.lang);
@@ -305,37 +302,20 @@ pub async fn bot_create_submit(
         .as_ref()
         .ok_or_else(|| bad_request(i.no_runtime))?;
 
-    if form.tenant_id.trim().is_empty()
-        || form.owner_id.trim().is_empty()
-        || form.session_id.trim().is_empty()
-    {
-        return Err(bad_request("All fields are required"));
-    }
+    let bot_id = uuid::Uuid::new_v4().to_string();
 
-    let session_id = form.session_id.trim().to_string();
-    let tenant_id = form.tenant_id.trim().to_string();
-    let owner_id = form.owner_id.trim().to_string();
-
-    let qr_store_for_bot = state.qr_store.clone();
-    let sid_for_qr = session_id.clone();
-    let bot = Arc::new(WeChatBot::new(BotOptions {
-        on_qr_url: Some(Box::new(move |url: &str| {
-            qr_store_for_bot.set(&sid_for_qr, url);
-        })),
-        ..Default::default()
-    }));
+    let qr_store = state.qr_store.clone();
+    let bid_for_qr = bot_id.clone();
+    let qr_callback = Box::new(move |url: &str| {
+        qr_store.set(&bid_for_qr, url);
+    });
 
     runtime
-        .register_bot(&tenant_id, &owner_id, &session_id, bot)
+        .create_bot(&bot_id, qr_callback)
         .await
         .map_err(internal_error)?;
 
-    runtime
-        .start_session(&session_id, false)
-        .await
-        .map_err(internal_error)?;
-
-    let detail_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
+    let detail_url = format!("/admin/bots/{}", urlencoding::encode(&bot_id));
     Ok(Redirect::to(&detail_url).into_response())
 }
 
@@ -411,6 +391,7 @@ struct ChatMessageVm {
     to_user_id: String,
     content_type: String,
     text_content: String,
+    direction: String,
 }
 
 #[derive(Template)]
@@ -441,19 +422,19 @@ pub async fn bot_history(
     let ui = hq.ui;
     let prefs = UiPrefs::resolve(ui.clone(), &jar);
     let jar = UiPrefs::apply_cookies_from_query(&ui, jar);
-    let exists = state
+    let session_row = state
         .repo
         .get_session(&session_id)
         .await
         .map_err(internal_error)?;
-    if exists.is_none() {
+    if session_row.is_none() {
         let i = i18n(&prefs.lang);
         return Ok((
             jar,
             (StatusCode::NOT_FOUND, Html(not_found_html(&i, &prefs))),
-        )
-            .into_response());
+        ).into_response());
     }
+    let bot_user_id = session_row.as_ref().map(|s| s.user_id.clone()).unwrap_or_default();
 
     const PAGE_SIZE: u64 = 30;
     let page = hq.page.max(1);
@@ -464,12 +445,20 @@ pub async fn bot_history(
         .map_err(internal_error)?;
     let rows: Vec<ChatMessageVm> = rows_db
         .into_iter()
-        .map(|m| ChatMessageVm {
-            received_at: format_dt(m.received_at),
-            from_user_id: m.from_user_id,
-            to_user_id: m.to_user_id,
-            content_type: m.content_type,
-            text_content: m.text_content,
+        .map(|m| {
+            let direction = if m.from_user_id == bot_user_id {
+                "out"
+            } else {
+                "in"
+            };
+            ChatMessageVm {
+                received_at: format_dt(m.received_at),
+                from_user_id: m.from_user_id,
+                to_user_id: m.to_user_id,
+                content_type: m.content_type,
+                text_content: m.text_content,
+                direction: direction.to_string(),
+            }
         })
         .collect();
     let total_pages = if total == 0 {
@@ -501,4 +490,36 @@ pub async fn bot_history(
     };
     let html = page_tpl.render().map_err(internal_error)?;
     Ok((jar, Html(html)).into_response())
+}
+
+// Public registration page
+
+#[derive(Template)]
+#[template(path = "bot_register.html")]
+struct BotRegisterTpl {
+    bot_id: String,
+    qr_url: String,
+    qr_image_url: String,
+}
+
+pub async fn bot_register(
+    State(state): State<AdminState>,
+    Path(bot_id): Path<String>,
+) -> Result<Response, Response> {
+    let qr_url = state.qr_store.get(&bot_id).unwrap_or_default();
+    let qr_image_url = if qr_url.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={}",
+            urlencoding::encode(&qr_url)
+        )
+    };
+    let page = BotRegisterTpl {
+        bot_id,
+        qr_url,
+        qr_image_url,
+    };
+    let html = page.render().map_err(internal_error)?;
+    Ok(Html(html).into_response())
 }

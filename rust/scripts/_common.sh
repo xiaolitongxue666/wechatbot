@@ -136,7 +136,13 @@ psql_exec_select() {
 psql_exec_file() {
     local pg_url="$1"
     local file="$2"
-    if command -v psql &>/dev/null; then
+    if [[ "$file" == "/dev/stdin" || "$file" == "/proc/self/fd/0" ]]; then
+        if command -v psql &>/dev/null; then
+            psql "$pg_url"
+        else
+            docker exec -i postgres psql -U postgres -d wechatbot
+        fi
+    elif command -v psql &>/dev/null; then
         psql "$pg_url" -f "$file"
     else
         docker exec -i postgres psql -U postgres -d wechatbot < "$file"

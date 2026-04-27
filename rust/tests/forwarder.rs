@@ -20,7 +20,7 @@ fn sample_envelope() -> EventEnvelope {
         event_id: Uuid::new_v4().to_string(),
         message_id: Uuid::new_v4().to_string(),
         session_id: format!("session-{}", Uuid::new_v4()),
-        tenant_id: "tenant-a".to_string(),
+        bot_id: "test-bot".to_string(),
         from_user_id: "user_x".to_string(),
         to_user_id: String::new(),
         content_type: "text".to_string(),

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="toolbar">
+    <div class="toolbar-group">
+      <button id="btn-add-bookmark" title="Add Bookmark (Ctrl+B)">+ Bookmark</button>
+      <button id="btn-add-folder" title="Add Folder (Ctrl+Shift+F)">+ Folder</button>
+      <button id="btn-delete-selected" title="Delete Selected (Del)">Delete</button>
+    </div>
+    <div class="toolbar-group">
+      <input type="text" id="search-input" placeholder="Search bookmarks...">
+      <button id="btn-clear-search" title="Clear search">X</button>
+    </div>
+    <div class="toolbar-group">
+      <button id="btn-collapse-all" title="Collapse All">Collapse</button>
+      <button id="btn-expand-all" title="Expand All">Expand</button>
+    </div>
+    <div class="toolbar-group toolbar-right">
+      <button id="btn-refresh" title="Refresh (F5)">Refresh</button>
+    </div>
+  </div>
+
+  <div id="tree-container">
+    <div id="tree"></div>
+  </div>
+
+  <!-- Hidden dialog for add/edit -->
+  <div id="dialog-overlay" class="hidden">
+    <div id="dialog">
+      <div id="dialog-title">Add Bookmark</div>
+      <div class="dialog-field">
+        <label for="dialog-name">Name:</label>
+        <input type="text" id="dialog-name">
+      </div>
+      <div class="dialog-field" id="dialog-url-field">
+        <label for="dialog-url">URL:</label>
+        <input type="text" id="dialog-url">
+      </div>
+      <div class="dialog-field">
+        <label for="dialog-parent">Folder:</label>
+        <select id="dialog-parent"></select>
+      </div>
+      <div class="dialog-actions">
+        <button id="dialog-save">Save</button>
+        <button id="dialog-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div id="context-menu" class="hidden">
+    <div class="context-item" data-action="edit">Edit</div>
+    <div class="context-item" data-action="add-bookmark">Add Bookmark Here</div>
+    <div class="context-item" data-action="add-folder">Add Subfolder</div>
+    <div class="context-separator"></div>
+    <div class="context-item" data-action="delete">Delete</div>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

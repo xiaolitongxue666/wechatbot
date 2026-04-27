@@ -1,0 +1,404 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  color: #e0e0e0;
+  background: #1e1e1e;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ===== Toolbar ===== */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-right {
+  margin-left: auto;
+}
+
+#toolbar button {
+  padding: 3px 10px;
+  background: #3c3c3c;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#toolbar button:hover {
+  background: #505050;
+}
+
+#toolbar button:active {
+  background: #2a2a2a;
+}
+
+#search-input {
+  padding: 3px 6px;
+  background: #3c3c3c;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font-size: 11px;
+  width: 180px;
+  outline: none;
+}
+
+#search-input:focus {
+  border-color: #007acc;
+}
+
+#search-input::placeholder {
+  color: #888;
+}
+
+#btn-clear-search {
+  padding: 3px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+#btn-clear-search:hover {
+  color: #e0e0e0;
+}
+
+#btn-clear-search.hidden {
+  visibility: hidden;
+}
+
+/* ===== Tree Container ===== */
+#tree-container {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+#tree {
+  min-height: 100%;
+}
+
+/* ===== Tree Node ===== */
+.tree-node {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tree-node:hover {
+  background: #2a2d2e;
+}
+
+.tree-node.selected {
+  background: #094771;
+}
+
+.tree-node.drag-over {
+  outline: 2px solid #007acc;
+  outline-offset: -2px;
+}
+
+.tree-node.dragging {
+  opacity: 0.5;
+}
+
+.tree-node .indent {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tree-node .toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 10px;
+  color: #888;
+}
+
+.tree-node .toggle:hover {
+  color: #e0e0e0;
+}
+
+.tree-node .toggle.empty {
+  visibility: hidden;
+}
+
+.tree-node .icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.tree-node .icon svg {
+  fill: #e0e0e0;
+  width: 14px;
+  height: 14px;
+}
+
+.tree-node .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.tree-node .url-text {
+  color: #888;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  font-size: 10px;
+}
+
+.tree-node .url-text:hover {
+  color: #aaa;
+}
+
+.tree-node .children {
+  display: none;
+}
+
+.tree-node.expanded > .children {
+  display: block;
+}
+
+.tree-node .node-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Search Highlight ===== */
+.tree-node .name .highlight {
+  background: #6a5a00;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+
+/* ===== Folder Drop Target ===== */
+.tree-node.drop-target-folder {
+  background: #1a3a5c;
+}
+
+.tree-node.drop-target-between {
+  border-top: 2px solid #007acc;
+}
+
+.tree-node.drop-highlight {
+  outline: 2px dashed #007acc;
+  outline-offset: 2px;
+}
+
+/* ===== Dialog ===== */
+#dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#dialog-overlay.hidden {
+  display: none;
+}
+
+#dialog {
+  background: #2d2d30;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 16px;
+  min-width: 360px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+#dialog-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e0e0e0;
+}
+
+.dialog-field {
+  margin-bottom: 10px;
+}
+
+.dialog-field label {
+  display: block;
+  font-size: 11px;
+  color: #aaa;
+  margin-bottom: 3px;
+}
+
+.dialog-field input,
+.dialog-field select {
+  width: 100%;
+  padding: 5px 8px;
+  background: #3c3c3c;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font-size: 12px;
+  outline: none;
+}
+
+.dialog-field input:focus,
+.dialog-field select:focus {
+  border-color: #007acc;
+}
+
+.dialog-field select {
+  max-height: 200px;
+}
+
+.dialog-field select option {
+  background: #2d2d30;
+  color: #e0e0e0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dialog-actions button {
+  padding: 5px 16px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#dialog-save {
+  background: #007acc;
+  color: white;
+  border: none;
+}
+
+#dialog-save:hover {
+  background: #0098ff;
+}
+
+#dialog-cancel {
+  background: #3c3c3c;
+  color: #e0e0e0;
+  border: 1px solid #555;
+}
+
+#dialog-cancel:hover {
+  background: #505050;
+}
+
+/* ===== Context Menu ===== */
+#context-menu {
+  position: fixed;
+  background: #2d2d30;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+#context-menu.hidden {
+  display: none;
+}
+
+.context-item {
+  padding: 5px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.context-item:hover {
+  background: #094771;
+}
+
+.context-separator {
+  height: 1px;
+  background: #555;
+  margin: 4px 0;
+}
+
+/* ===== Inline Edit ===== */
+.tree-node .inline-edit {
+  background: #3c3c3c;
+  color: #e0e0e0;
+  border: 1px solid #007acc;
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-size: 12px;
+  outline: none;
+  width: 200px;
+}
+
+/* ===== Scrollbar ===== */
+#tree-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+#tree-container::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+#tree-container::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+#tree-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bot 注册</title>
+  <link rel="stylesheet" href="/static/admin/style.css">
+  {% if qr_url.is_empty() %}
+  <meta http-equiv="refresh" content="3">
+  {% endif %}
+  <style>
+    .register-page {
+      max-width: 480px;
+      margin: 40px auto;
+      text-align: center;
+    }
+    .register-page h2 {
+      margin-bottom: 24px;
+    }
+    .register-page .qr-section {
+      background: #fff;
+      padding: 32px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .register-page .qr-img {
+      display: block;
+      margin: 16px auto;
+      border: 8px solid #fff;
+      border-radius: 8px;
+    }
+    .register-page .muted {
+      color: #888;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body class="theme-light">
+<div class="register-page">
+  <h2>扫码注册 Bot</h2>
+  {% if qr_url.is_empty() %}
+  <div class="qr-section">
+    <p class="muted">等待二维码生成...</p>
+  </div>
+  {% else %}
+  <div class="qr-section">
+    <p>请用微信扫描下方二维码</p>
+    <img src="{{ qr_image_url }}" alt="QR Code" class="qr-img" width="240" height="240">
+    <p class="muted">Bot ID: {{ bot_id }}</p>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

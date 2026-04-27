@@ -14,7 +14,7 @@ pub struct EventEnvelope {
     pub event_id: String,
     pub message_id: String,
     pub session_id: String,
-    pub tenant_id: String,
+    pub bot_id: String,
     pub from_user_id: String,
     pub to_user_id: String,
     pub content_type: String,
@@ -45,7 +45,7 @@ impl MessageIngestor {
     pub async fn ingest(
         &self,
         bot: Arc<WeChatBot>,
-        tenant_id: &str,
+        bot_id: &str,
         session_id: &str,
         message: &IncomingMessage,
     ) -> Result<EventEnvelope> {
@@ -53,7 +53,7 @@ impl MessageIngestor {
             event_id: Uuid::new_v4().to_string(),
             message_id: Uuid::new_v4().to_string(),
             session_id: session_id.to_string(),
-            tenant_id: tenant_id.to_string(),
+            bot_id: bot_id.to_string(),
             from_user_id: message.user_id.clone(),
             to_user_id: String::new(),
             content_type: format!("{:?}", message.content_type).to_lowercase(),
@@ -96,6 +96,33 @@ impl MessageIngestor {
         self.event_queue
             .publish(serde_json::to_string(&event)?)
             .await?;
+        Ok(event)
+    }
+
+    pub async fn ingest_sent(
+        &self,
+        session_id: &str,
+        bot_id: &str,
+        bot_user_id: &str,
+        to_user_id: &str,
+        text: &str,
+    ) -> Result<EventEnvelope> {
+        let event = EventEnvelope {
+            event_id: Uuid::new_v4().to_string(),
+            message_id: Uuid::new_v4().to_string(),
+            session_id: session_id.to_string(),
+            bot_id: bot_id.to_string(),
+            from_user_id: bot_user_id.to_string(),
+            to_user_id: to_user_id.to_string(),
+            content_type: "text".to_string(),
+            text_content: text.to_string(),
+            raw_payload_json: json!({"type": "sent", "text": text}),
+            received_at_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as i64)
+                .unwrap_or_default(),
+        };
+        self.repository.save_message(&event).await?;
         Ok(event)
     }
 }
