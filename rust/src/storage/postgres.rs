@@ -30,29 +30,38 @@ impl PostgresChatRepository {
 
 #[async_trait]
 impl ChatRepository for PostgresChatRepository {
-    async fn upsert_session(
-        &self,
-        session_id: &str,
-        tenant_id: &str,
-        owner_id: &str,
-        status: &str,
-    ) -> Result<()> {
+    async fn upsert_bot(&self, bot_id: &str, status: &str) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO bot_sessions (
-              session_id, tenant_id, owner_id, status, created_at, updated_at
-            ) VALUES ($1,$2,$3,$4,NOW(),NOW())
-            ON CONFLICT (session_id) DO UPDATE
+            INSERT INTO bots (bot_id, status, created_at, updated_at)
+            VALUES ($1, $2, NOW(), NOW())
+            ON CONFLICT (bot_id) DO UPDATE
             SET status = EXCLUDED.status, updated_at = NOW()
             "#,
         )
-        .bind(session_id)
-        .bind(tenant_id)
-        .bind(owner_id)
+        .bind(bot_id)
         .bind(status)
         .execute(&self.pool)
         .await
-        .map_err(|error| WeChatBotError::Other(format!("upsert bot_sessions failed: {error}")))?;
+        .map_err(|error| WeChatBotError::Other(format!("upsert bots failed: {error}")))?;
+        Ok(())
+    }
+
+    async fn create_session(&self, session_id: &str, bot_id: &str, user_id: &str) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO bot_sessions (session_id, bot_id, user_id, status, created_at, updated_at)
+            VALUES ($1, $2, $3, 'active', NOW(), NOW())
+            ON CONFLICT (bot_id, user_id) DO UPDATE
+            SET updated_at = NOW()
+            "#,
+        )
+        .bind(session_id)
+        .bind(bot_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| WeChatBotError::Other(format!("create session failed: {error}")))?;
         Ok(())
     }
 
@@ -60,15 +69,14 @@ impl ChatRepository for PostgresChatRepository {
         sqlx::query(
             r#"
             INSERT INTO chat_messages (
-              message_id, event_id, session_id, tenant_id, from_user_id, to_user_id,
+              message_id, event_id, session_id, from_user_id, to_user_id,
               content_type, text_content, raw_payload_json, received_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,to_timestamp($10::double precision / 1000.0))
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,to_timestamp($9::double precision / 1000.0))
             "#,
         )
         .bind(&event.message_id)
         .bind(&event.event_id)
         .bind(&event.session_id)
-        .bind(&event.tenant_id)
         .bind(&event.from_user_id)
         .bind(&event.to_user_id)
         .bind(&event.content_type)

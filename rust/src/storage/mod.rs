@@ -21,13 +21,8 @@ pub struct MediaRecord {
 
 #[async_trait]
 pub trait ChatRepository: Send + Sync {
-    async fn upsert_session(
-        &self,
-        session_id: &str,
-        tenant_id: &str,
-        owner_id: &str,
-        status: &str,
-    ) -> Result<()>;
+    async fn upsert_bot(&self, bot_id: &str, status: &str) -> Result<()>;
+    async fn create_session(&self, session_id: &str, bot_id: &str, user_id: &str) -> Result<()>;
     async fn save_message(&self, event: &EventEnvelope) -> Result<()>;
     async fn save_media(&self, media_record: &MediaRecord) -> Result<()>;
 }

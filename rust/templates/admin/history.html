@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ i18n.page_history }}</title>
   <link rel="stylesheet" href="/static/admin/style.css">
+  {% if page == 1 %}
+  <meta http-equiv="refresh" content="3">
+  {% endif %}
 </head>
 <body class="theme-{{ prefs.theme }}">
+<div class="page">
 <header class="topbar">
   <div class="brand">WeChat Bot Admin</div>
   <nav class="nav">
@@ -24,14 +28,17 @@
 </header>
 
 <main class="main">
+  <h2 class="section-title">{{ i18n.action_history }}</h2>
   <p class="muted mono">{{ session_id }}</p>
+  <section class="panel table-wrap">
   {% if rows.is_empty() %}
-  <p class="muted">{{ i18n.no_data }}</p>
+  <p class="muted empty-hint">{{ i18n.no_data }}</p>
   {% else %}
   <table class="table history">
     <thead>
       <tr>
         <th>{{ i18n.history_time }}</th>
+        <th>{{ i18n.history_direction }}</th>
         <th>{{ i18n.history_from }}</th>
         <th>{{ i18n.history_to }}</th>
         <th>{{ i18n.history_type }}</th>
@@ -40,8 +47,9 @@
     </thead>
     <tbody>
       {% for row in rows %}
-      <tr>
+      <tr class="{% if row.direction == "in" %}row-in{% else %}row-out{% endif %}">
         <td class="mono nowrap">{{ row.received_at }}</td>
+        <td>{% if row.direction == "in" %}{{ i18n.history_direction_in }}{% else %}{{ i18n.history_direction_out }}{% endif %}</td>
         <td class="mono">{{ row.from_user_id }}</td>
         <td class="mono">{{ row.to_user_id }}</td>
         <td>{{ row.content_type }}</td>
@@ -51,16 +59,18 @@
     </tbody>
   </table>
   {% endif %}
+  </section>
   <nav class="pagination">
     {% if has_prev %}
-    <a href="/admin/bots/{{ session_id }}/history?{{ prev_qs }}">{{ i18n.pagination_prev }}</a>
+    <a class="btn secondary" href="/admin/bots/{{ session_id }}/history?{{ prev_qs }}">{{ i18n.pagination_prev }}</a>
     {% endif %}
     <span class="muted">{{ page }} / {{ total_pages }} · {{ total }} msgs · {{ page_size }}/page</span>
     {% if has_next %}
-    <a href="/admin/bots/{{ session_id }}/history?{{ next_qs }}">{{ i18n.pagination_next }}</a>
+    <a class="btn secondary" href="/admin/bots/{{ session_id }}/history?{{ next_qs }}">{{ i18n.pagination_next }}</a>
     {% endif %}
   </nav>
-  <p><a href="/admin/bots/{{ session_id }}?{{ prefs.query_suffix() }}">← {{ i18n.action_detail }}</a></p>
+  <p><a class="btn secondary" href="/admin/bots/{{ session_id }}?{{ prefs.query_suffix() }}">← {{ i18n.action_detail }}</a></p>
 </main>
+</div>
 </body>
 </html>

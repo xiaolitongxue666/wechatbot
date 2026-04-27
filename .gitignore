@@ -6,6 +6,7 @@ tmp/
 .next/
 next-env.d.ts
 target/
+target-test/
 package-lock.json
 __pycache__/
 *.pyc
@@ -16,4 +17,7 @@ __pycache__/
 .admin.pid
 .admin.log
 data/
+
+# Binary build artifacts
+*.exe
 

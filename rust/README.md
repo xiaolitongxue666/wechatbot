@@ -14,21 +14,24 @@ Requires Rust 2021 edition. Built on `tokio` + `reqwest`.
 
 ## Quick Start
 
-```rust
-use wechatbot::{WeChatBot, BotOptions};
+```bash
+# 前置条件：Docker Desktop + Rust toolchain
+bash scripts/start.sh
+```
 
-#[tokio::main]
-async fn main() {
-    let bot = WeChatBot::new(BotOptions::default());
-    let creds = bot.login(false).await.unwrap();
-    println!("Logged in: {}", creds.account_id);
+一条命令完成所有步骤：拉取并启动后台服务（PostgreSQL / Redis / MinIO）→ 数据库迁移 → 灌入种子数据 → 启动管理后台。
 
-    bot.on_message(Box::new(|msg| {
-        println!("{}: {}", msg.user_id, msg.text);
-    })).await;
+启动后访问 `http://127.0.0.1:8787/admin` 即可进入管理界面。
 
-    bot.run().await.unwrap();
-}
+```bash
+# 跳过种子数据（仅建表，不插入示例数据）
+bash scripts/start.sh --no-seed
+
+# 不启动管理后台（仅启动服务和初始化数据库）
+bash scripts/start.sh --no-admin
+
+# 查看全部可用脚本
+bash scripts/status.sh
 ```
 
 ## Architecture
@@ -301,6 +304,18 @@ bash scripts/admin.sh start         # start admin in background
 bash scripts/admin.sh stop          # stop admin
 bash scripts/admin.sh logs          # tail admin logs
 ```
+
+### Development Containers (docker-compose.dev.yml)
+
+The local development stack starts three infrastructure containers:
+
+- `rust-postgres-1` (`postgres:16`, `5432`): primary relational database for bot sessions, messages, and admin queries. Uses the `database.local_url` setting in `config/app.toml` and persists data in the `pgdata` volume.
+- `rust-redis-1` (`redis:7`, `6379`): cache/state/queue backend used by Redis-based runtime features. Uses `redis.local_url` in `config/app.toml`.
+- `rust-minio-1` (`minio/minio:latest`, `9000` + `9001`): S3-compatible object storage for media workflows. `9000` is the S3 API endpoint and `9001` is the MinIO console. Uses the `miniodata` volume for persistence.
+
+Notes:
+- Current default media backend is `localfs` (`media.backend = "localfs"`), so media writes go to local filesystem unless you switch backend mode.
+- MinIO is still useful in development because the endpoint and credentials are preconfigured and ready when switching to S3-compatible storage.
 
 **Full cleanup:**
 ```bash

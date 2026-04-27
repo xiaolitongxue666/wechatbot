@@ -20,8 +20,8 @@ pub enum SessionStatus {
 #[derive(Clone)]
 pub struct BotSession {
     pub session_id: String,
-    pub tenant_id: String,
-    pub owner_id: String,
+    pub bot_id: String,
+    pub user_id: String,
     pub bot: Arc<WeChatBot>,
 }
 

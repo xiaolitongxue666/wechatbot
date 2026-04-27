@@ -1,7 +1,6 @@
 //! Run from `rust/`: `cargo run --example multi_bot_runtime`
 
-use std::sync::Arc;
-use wechatbot::{AppConfig, BotOptions, MultiBotRuntime, WeChatBot};
+use wechatbot::{AppConfig, MultiBotRuntime};
 
 #[tokio::main]
 async fn main() {
@@ -13,18 +12,13 @@ async fn main() {
         .await
         .expect("init runtime failed");
 
-    let bot = Arc::new(WeChatBot::new(BotOptions {
-        on_qr_url: Some(Box::new(|url| println!("QR_URL={url}"))),
-        ..Default::default()
-    }));
     runtime
-        .register_bot("tenant-demo", "owner-demo", "session-demo", bot)
+        .create_bot(
+            "demo-bot",
+            Box::new(|url| println!("QR_URL={url}")),
+        )
         .await
-        .expect("register bot failed");
-    runtime
-        .start_session("session-demo", false)
-        .await
-        .expect("start session failed");
+        .expect("create bot failed");
 
     runtime
         .forwarder

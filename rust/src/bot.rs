@@ -71,6 +71,12 @@ impl WeChatBot {
         }
     }
 
+    /// Inject credentials directly (for session bots created from registration flow).
+    pub async fn set_credentials(&self, creds: &Credentials) {
+        *self.credentials.write().await = Some(creds.clone());
+        *self.base_url.write().await = creds.base_url.clone();
+    }
+
     /// Login via QR code. Returns credentials on success.
     pub async fn login(&self, force: bool) -> Result<Credentials> {
         let base_url = self.base_url.read().await.clone();

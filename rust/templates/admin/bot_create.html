@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/admin/style.css">
 </head>
 <body class="theme-{{ prefs.theme }}">
+<div class="page">
 <header class="topbar">
   <div class="brand">WeChat Bot Admin</div>
   <nav class="nav">
@@ -24,29 +25,21 @@
 </header>
 
 <main class="main">
+  <h2 class="section-title">{{ i18n.action_create }}</h2>
   {% if !has_runtime %}
-  <p class="muted">{{ i18n.no_runtime }}</p>
+  <p class="muted empty-hint panel">{{ i18n.no_runtime }}</p>
   {% else %}
-  <h2>{{ i18n.action_create }}</h2>
-  <form method="POST" action="/admin/bots" class="bot-form">
-    <div class="form-group">
-      <label for="tenant_id">{{ i18n.form_tenant_id }}</label>
-      <input type="text" id="tenant_id" name="tenant_id" placeholder="e.g. my-tenant" required>
-    </div>
-    <div class="form-group">
-      <label for="owner_id">{{ i18n.form_owner_id }}</label>
-      <input type="text" id="owner_id" name="owner_id" placeholder="e.g. my-owner" required>
-    </div>
-    <div class="form-group">
-      <label for="session_id">{{ i18n.form_session_id }}</label>
-      <input type="text" id="session_id" name="session_id" placeholder="e.g. my-bot-01" required>
-    </div>
-    <button type="submit" class="btn">{{ i18n.btn_create }}</button>
-  </form>
+  <section class="panel form-panel">
+    <p class="muted">{{ i18n.create_desc }}</p>
+    <form method="POST" action="/admin/bots" class="bot-form">
+      <button type="submit" class="btn">{{ i18n.btn_create }}</button>
+    </form>
+  </section>
   {% endif %}
   <p class="actions-row">
     <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
   </p>
 </main>
+</div>
 </body>
 </html>

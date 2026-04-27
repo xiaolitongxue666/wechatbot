@@ -15,7 +15,6 @@ type HmacSha256 = Hmac<Sha256>;
 pub struct ForwardEvent {
     pub event_id: String,
     pub session_id: String,
-    pub tenant_id: String,
     pub status: String,
     pub retry_count: i32,
     pub last_error: Option<String>,

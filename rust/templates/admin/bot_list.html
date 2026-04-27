@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/admin/style.css">
 </head>
 <body class="theme-{{ prefs.theme }}">
+<div class="page">
 <header class="topbar">
   <div class="brand">WeChat Bot Admin</div>
   <nav class="nav">
@@ -24,44 +25,55 @@
 </header>
 
 <main class="main">
+  <h2 class="section-title">{{ i18n.page_bot_list }}</h2>
+
   {% if has_runtime %}
-  <p><a class="btn" href="/admin/bots/create?{{ prefs.query_suffix() }}">{{ i18n.action_new_bot }}</a></p>
+  <p class="actions-row">
+    <a class="btn" href="/admin/bots/create?{{ prefs.query_suffix() }}">{{ i18n.action_new_bot }}</a>
+  </p>
   {% endif %}
+
   {% if rows.is_empty() %}
-  <p class="muted">{{ i18n.no_data }}</p>
+  <p class="muted empty-hint panel">{{ i18n.no_data }}</p>
   {% else %}
-  <table class="table">
+  <div class="table-wrap panel">
+  <table class="data-table">
     <thead>
       <tr>
-        <th>{{ i18n.col_session_id }}</th>
-        <th>{{ i18n.col_tenant }}</th>
-        <th>{{ i18n.col_owner }}</th>
+        <th>{{ i18n.col_bot_id }}</th>
         <th>{{ i18n.col_status }}</th>
         <th>{{ i18n.col_heartbeat }}</th>
         <th>{{ i18n.col_updated }}</th>
-        <th></th>
+        <th>{{ i18n.action_detail }}</th>
       </tr>
     </thead>
     <tbody>
       {% for row in rows %}
       <tr>
-        <td class="mono">{{ row.session_id }}</td>
-        <td>{{ row.tenant_id }}</td>
-        <td>{{ row.owner_id }}</td>
-        <td>{{ row.runtime_status }}</td>
+        <td class="mono">
+          <a href="/admin/bots/{{ row.bot_id }}?{{ prefs.query_suffix() }}">{{ row.bot_id }}</a>
+        </td>
+        <td>
+          {% if row.status == "Online" %}
+          <span class="status-pill status-online">{{ i18n.status_online }}</span>
+          {% else if row.status == "Offline" %}
+          <span class="status-pill status-offline">{{ i18n.status_offline }}</span>
+          {% else if row.status == "Expired" %}
+          <span class="status-pill status-expired">{{ row.status }}</span>
+          {% else %}
+          <span class="status-pill status-default">{{ row.status }}</span>
+          {% endif %}
+        </td>
         <td>{{ row.last_heartbeat }}</td>
         <td>{{ row.updated_at }}</td>
-        <td class="actions">
-          <a href="/admin/bots/{{ row.session_id }}?{{ prefs.query_suffix() }}">{{ i18n.action_detail }}</a>
-          <a href="/admin/bots/{{ row.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a>
-        </td>
+        <td><a class="btn secondary small" href="/admin/bots/{{ row.bot_id }}?{{ prefs.query_suffix() }}">{{ i18n.action_detail }}</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
 </main>
-
-<footer class="footer muted"><a href="/admin?{{ prefs.query_suffix() }}">{{ i18n.nav_dashboard }}</a></footer>
+</div>
 </body>
 </html>
