@@ -24,6 +24,9 @@
 </header>
 
 <main class="main">
+  {% if has_runtime %}
+  <p><a class="btn" href="/admin/bots/create?{{ prefs.query_suffix() }}">{{ i18n.action_new_bot }}</a></p>
+  {% endif %}
   {% if rows.is_empty() %}
   <p class="muted">{{ i18n.no_data }}</p>
   {% else %}
@@ -45,7 +48,7 @@
         <td class="mono">{{ row.session_id }}</td>
         <td>{{ row.tenant_id }}</td>
         <td>{{ row.owner_id }}</td>
-        <td>{{ row.status }}</td>
+        <td>{{ row.runtime_status }}</td>
         <td>{{ row.last_heartbeat }}</td>
         <td>{{ row.updated_at }}</td>
         <td class="actions">

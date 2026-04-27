@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="{{ lang_attr }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ i18n.page_bot_create }}</title>
+  <link rel="stylesheet" href="/static/admin/style.css">
+</head>
+<body class="theme-{{ prefs.theme }}">
+<header class="topbar">
+  <div class="brand">WeChat Bot Admin</div>
+  <nav class="nav">
+    <a class="{% if nav_active == "dash" %}active{% endif %}" href="/admin?{{ prefs.query_suffix() }}">{{ i18n.nav_dashboard }}</a>
+    <a class="{% if nav_active == "bots" %}active{% endif %}" href="/admin/bots?{{ prefs.query_suffix() }}">{{ i18n.nav_bots }}</a>
+  </nav>
+  <div class="prefs">
+    <span class="muted">{{ i18n.lang_label }}</span>
+    <a href="/admin/bots/create?lang=zh&amp;theme={{ prefs.theme }}">{{ i18n.lang_zh }}</a>
+    <a href="/admin/bots/create?lang=en&amp;theme={{ prefs.theme }}">{{ i18n.lang_en }}</a>
+    <span class="muted">{{ i18n.theme_label }}</span>
+    <a href="/admin/bots/create?lang={{ prefs.lang }}&amp;theme=dark">{{ i18n.theme_dark }}</a>
+    <a href="/admin/bots/create?lang={{ prefs.lang }}&amp;theme=light">{{ i18n.theme_light }}</a>
+  </div>
+</header>
+
+<main class="main">
+  {% if !has_runtime %}
+  <p class="muted">{{ i18n.no_runtime }}</p>
+  {% else %}
+  <h2>{{ i18n.action_create }}</h2>
+  <form method="POST" action="/admin/bots" class="bot-form">
+    <div class="form-group">
+      <label for="tenant_id">{{ i18n.form_tenant_id }}</label>
+      <input type="text" id="tenant_id" name="tenant_id" placeholder="e.g. my-tenant" required>
+    </div>
+    <div class="form-group">
+      <label for="owner_id">{{ i18n.form_owner_id }}</label>
+      <input type="text" id="owner_id" name="owner_id" placeholder="e.g. my-owner" required>
+    </div>
+    <div class="form-group">
+      <label for="session_id">{{ i18n.form_session_id }}</label>
+      <input type="text" id="session_id" name="session_id" placeholder="e.g. my-bot-01" required>
+    </div>
+    <button type="submit" class="btn">{{ i18n.btn_create }}</button>
+  </form>
+  {% endif %}
+  <p class="actions-row">
+    <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
+  </p>
+</main>
+</body>
+</html>

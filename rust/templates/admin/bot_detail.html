@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ i18n.page_bot_detail }}</title>
   <link rel="stylesheet" href="/static/admin/style.css">
+  {% if has_runtime && qr_url.is_empty() && !is_online %}
+  <meta http-equiv="refresh" content="2">
+  {% endif %}
 </head>
 <body class="theme-{{ prefs.theme }}">
 <header class="topbar">
@@ -29,15 +32,42 @@
     <dt>{{ i18n.col_tenant }}</dt><dd>{{ bot.tenant_id }}</dd>
     <dt>{{ i18n.col_owner }}</dt><dd>{{ bot.owner_id }}</dd>
     <dt>wx_user_id</dt><dd>{{ wx_user_display }}</dd>
-    <dt>{{ i18n.col_status }}</dt><dd>{{ bot.status }}</dd>
+    <dt>{{ i18n.col_status }}</dt><dd>{{ runtime_status }}</dd>
     <dt>{{ i18n.col_heartbeat }}</dt><dd>{{ heartbeat_display }}</dd>
     <dt>{{ i18n.col_updated }}</dt><dd>{{ updated_display }}</dd>
     <dt>created</dt><dd>{{ created_display }}</dd>
   </dl>
+
+  {% if has_runtime %}
+  <div class="actions-row">
+    {% if is_online %}
+    <form method="POST" action="/admin/bots/{{ bot.session_id }}/stop" style="display:inline">
+      <button type="submit" class="btn" style="background:#e74c3c">{{ i18n.btn_stop }}</button>
+    </form>
+    {% else %}
+    <form method="POST" action="/admin/bots/{{ bot.session_id }}/start" style="display:inline">
+      <button type="submit" class="btn">{{ i18n.btn_start }}</button>
+    </form>
+    {% endif %}
+    <a class="btn secondary" href="/admin/bots/{{ bot.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a>
+    <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
+  </div>
+
+  {% if !qr_url.is_empty() %}
+  <div class="qr-section">
+    <h3>{{ i18n.qr_scan_prompt }}</h3>
+    <img src="{{ qr_image_url }}" alt="Login QR Code" class="qr-img" width="220" height="220">
+    <p class="muted mono" style="word-break:break-all;max-width:400px"><a href="{{ qr_url }}" target="_blank">{{ qr_url }}</a></p>
+  </div>
+  {% else if !is_online %}
+  <p class="muted qr-waiting">{{ i18n.qr_waiting }}</p>
+  {% endif %}
+  {% else %}
   <p class="actions-row">
     <a class="btn" href="/admin/bots/{{ bot.session_id }}/history?{{ prefs.query_suffix() }}">{{ i18n.action_history }}</a>
     <a class="btn secondary" href="/admin/bots?{{ prefs.query_suffix() }}">← {{ i18n.nav_bots }}</a>
   </p>
+  {% endif %}
 </main>
 </body>
 </html>

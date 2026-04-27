@@ -1,14 +1,16 @@
 use crate::admin::repository::{AdminOverview, BotSessionRow};
 use crate::admin::state::AdminState;
 use crate::admin::ui::{i18n, I18n, UiPrefs, UiQuery};
+use crate::bot::{BotOptions, WeChatBot};
 use askama::Template;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Form, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Json;
 use axum_extra::extract::CookieJar;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 fn format_dt_opt(dt: &Option<DateTime<Utc>>) -> String {
     dt.map(|d| d.format("%Y-%m-%d %H:%M:%S UTC").to_string())
@@ -21,6 +23,10 @@ fn format_dt(dt: DateTime<Utc>) -> String {
 
 fn internal_error(err: impl std::fmt::Display) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+}
+
+fn bad_request(err: impl std::fmt::Display) -> Response {
+    (StatusCode::BAD_REQUEST, err.to_string()).into_response()
 }
 
 pub async fn root_redirect() -> Redirect {
@@ -98,9 +104,9 @@ struct BotListRowVm {
     session_id: String,
     tenant_id: String,
     owner_id: String,
-    status: String,
     last_heartbeat: String,
     updated_at: String,
+    runtime_status: String,
 }
 
 #[derive(Template)]
@@ -111,6 +117,7 @@ struct BotListTpl<'a> {
     lang_attr: &'a str,
     nav_active: &'a str,
     rows: &'a [BotListRowVm],
+    has_runtime: bool,
 }
 
 pub async fn bot_list(
@@ -121,17 +128,26 @@ pub async fn bot_list(
     let prefs = UiPrefs::resolve(q.clone(), &jar);
     let jar = UiPrefs::apply_cookies_from_query(&q, jar);
     let rows_db = state.repo.list_sessions().await.map_err(internal_error)?;
-    let rows: Vec<BotListRowVm> = rows_db
-        .into_iter()
-        .map(|row| BotListRowVm {
+    let has_runtime = state.runtime.is_some();
+    let mut rows = Vec::with_capacity(rows_db.len());
+    for row in rows_db {
+        let runtime_status = if let Some(ref rt) = state.runtime {
+            match rt.session_manager.status_of(&row.session_id).await {
+                Some(s) => format!("{:?}", s),
+                None => row.status.clone(),
+            }
+        } else {
+            row.status.clone()
+        };
+        rows.push(BotListRowVm {
             session_id: row.session_id,
             tenant_id: row.tenant_id,
             owner_id: row.owner_id,
-            status: row.status,
             last_heartbeat: format_dt_opt(&row.last_heartbeat_at),
             updated_at: format_dt(row.updated_at),
-        })
-        .collect();
+            runtime_status,
+        });
+    }
     let i = i18n(&prefs.lang);
     let page = BotListTpl {
         i18n: i,
@@ -139,6 +155,7 @@ pub async fn bot_list(
         lang_attr: if prefs.lang == "en" { "en" } else { "zh-CN" },
         nav_active: "bots",
         rows: &rows,
+        has_runtime,
     };
     let html = page.render().map_err(internal_error)?;
     Ok((jar, Html(html)).into_response())
@@ -156,6 +173,11 @@ struct BotDetailTpl<'a> {
     heartbeat_display: String,
     created_display: String,
     updated_display: String,
+    qr_url: String,
+    qr_image_url: String,
+    has_runtime: bool,
+    is_online: bool,
+    runtime_status: String,
 }
 
 pub async fn bot_detail(
@@ -186,6 +208,34 @@ pub async fn bot_detail(
         .filter(|s| !s.is_empty())
         .unwrap_or("—")
         .to_string();
+
+    let qr_url = state.qr_store.get(&session_id);
+    let qr_image_url = qr_url
+        .as_ref()
+        .map(|url| {
+            format!(
+                "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={}",
+                urlencoding::encode(url)
+            )
+        })
+        .unwrap_or_default();
+
+    let has_runtime = state.runtime.is_some();
+    let (is_online, runtime_status) = if let Some(ref rt) = state.runtime {
+        let status = rt.session_manager.status_of(&session_id).await;
+        let s = match status {
+            Some(crate::session::SessionStatus::Online) => "Online".to_string(),
+            Some(s) => format!("{:?}", s),
+            None => bot.status.clone(),
+        };
+        (
+            matches!(status, Some(crate::session::SessionStatus::Online)),
+            s,
+        )
+    } else {
+        (bot.status == "online", bot.status.clone())
+    };
+
     let page = BotDetailTpl {
         i18n: i,
         prefs: &prefs,
@@ -196,9 +246,137 @@ pub async fn bot_detail(
         heartbeat_display: format_dt_opt(&bot.last_heartbeat_at),
         created_display: format_dt(bot.created_at),
         updated_display: format_dt(bot.updated_at),
+        qr_url: qr_url.unwrap_or_default(),
+        qr_image_url,
+        has_runtime,
+        is_online,
+        runtime_status,
     };
     let html = page.render().map_err(internal_error)?;
     Ok((jar, Html(html)).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct CreateBotForm {
+    pub tenant_id: String,
+    pub owner_id: String,
+    pub session_id: String,
+}
+
+#[derive(Template)]
+#[template(path = "admin/bot_create.html")]
+struct BotCreateTpl<'a> {
+    i18n: I18n,
+    prefs: &'a UiPrefs,
+    lang_attr: &'a str,
+    nav_active: &'a str,
+    has_runtime: bool,
+}
+
+pub async fn bot_create_form(
+    State(state): State<AdminState>,
+    Query(q): Query<UiQuery>,
+    jar: CookieJar,
+) -> Result<Response, Response> {
+    let prefs = UiPrefs::resolve(q.clone(), &jar);
+    let jar = UiPrefs::apply_cookies_from_query(&q, jar);
+    let has_runtime = state.runtime.is_some();
+    let i = i18n(&prefs.lang);
+    let page = BotCreateTpl {
+        i18n: i,
+        prefs: &prefs,
+        lang_attr: if prefs.lang == "en" { "en" } else { "zh-CN" },
+        nav_active: "bots",
+        has_runtime,
+    };
+    let html = page.render().map_err(internal_error)?;
+    Ok((jar, Html(html)).into_response())
+}
+
+pub async fn bot_create_submit(
+    State(state): State<AdminState>,
+    Form(form): Form<CreateBotForm>,
+) -> Result<Response, Response> {
+    let prefs = UiPrefs::default();
+    let i = i18n(&prefs.lang);
+
+    let runtime = state
+        .runtime
+        .as_ref()
+        .ok_or_else(|| bad_request(i.no_runtime))?;
+
+    if form.tenant_id.trim().is_empty()
+        || form.owner_id.trim().is_empty()
+        || form.session_id.trim().is_empty()
+    {
+        return Err(bad_request("All fields are required"));
+    }
+
+    let session_id = form.session_id.trim().to_string();
+    let tenant_id = form.tenant_id.trim().to_string();
+    let owner_id = form.owner_id.trim().to_string();
+
+    let qr_store_for_bot = state.qr_store.clone();
+    let sid_for_qr = session_id.clone();
+    let bot = Arc::new(WeChatBot::new(BotOptions {
+        on_qr_url: Some(Box::new(move |url: &str| {
+            qr_store_for_bot.set(&sid_for_qr, url);
+        })),
+        ..Default::default()
+    }));
+
+    runtime
+        .register_bot(&tenant_id, &owner_id, &session_id, bot)
+        .await
+        .map_err(internal_error)?;
+
+    runtime
+        .start_session(&session_id, false)
+        .await
+        .map_err(internal_error)?;
+
+    let detail_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
+    Ok(Redirect::to(&detail_url).into_response())
+}
+
+pub async fn bot_start(
+    State(state): State<AdminState>,
+    Path(session_id): Path<String>,
+) -> Result<Response, Response> {
+    let i = i18n("zh");
+    let runtime = state
+        .runtime
+        .as_ref()
+        .ok_or_else(|| bad_request(i.no_runtime))?;
+
+    runtime
+        .start_session(&session_id, false)
+        .await
+        .map_err(internal_error)?;
+
+    let back_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
+    Ok(Redirect::to(&back_url).into_response())
+}
+
+pub async fn bot_stop(
+    State(state): State<AdminState>,
+    Path(session_id): Path<String>,
+) -> Result<Response, Response> {
+    let i = i18n("zh");
+    let runtime = state
+        .runtime
+        .as_ref()
+        .ok_or_else(|| bad_request(i.no_runtime))?;
+
+    runtime
+        .stop_session(&session_id)
+        .await
+        .map_err(internal_error)?;
+
+    state.qr_store.remove(&session_id);
+
+    let back_url = format!("/admin/bots/{}", urlencoding::encode(&session_id));
+    Ok(Redirect::to(&back_url).into_response())
 }
 
 fn not_found_html(i18n: &I18n, prefs: &UiPrefs) -> String {

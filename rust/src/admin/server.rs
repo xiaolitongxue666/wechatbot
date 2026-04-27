@@ -1,28 +1,46 @@
-use crate::admin::handlers::{bot_detail, bot_history, bot_list, dashboard, healthz, overview_json, root_redirect};
+use crate::admin::handlers::{
+    bot_create_form, bot_create_submit, bot_detail, bot_history, bot_list, bot_start, bot_stop,
+    dashboard, healthz, overview_json, root_redirect,
+};
+use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
 use crate::admin::state::AdminState;
 use crate::config::AppConfig;
 use crate::error::Result;
+use crate::runtime::MultiBotRuntime;
 use crate::storage::postgres::PostgresChatRepository;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::Router;
 use sqlx::PgPool;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::signal;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
-/// Build router with an existing pool (for tests).
 pub fn admin_router(pool: PgPool) -> Router {
+    admin_router_with_runtime(pool, None, QrUrlStore::new())
+}
+
+pub fn admin_router_with_runtime(
+    pool: PgPool,
+    runtime: Option<Arc<MultiBotRuntime>>,
+    qr_store: QrUrlStore,
+) -> Router {
     let state = AdminState {
         repo: AdminRepository::new(pool),
+        runtime,
+        qr_store,
     };
     let static_dir = static_dir();
     let admin = Router::new()
         .route("/", get(dashboard))
-        .route("/bots", get(bot_list))
+        .route("/bots", get(bot_list).post(bot_create_submit))
+        .route("/bots/create", get(bot_create_form))
         .route("/bots/{session_id}", get(bot_detail))
+        .route("/bots/{session_id}/start", post(bot_start))
+        .route("/bots/{session_id}/stop", post(bot_stop))
         .route("/bots/{session_id}/history", get(bot_history))
         .route("/api/overview", get(overview_json))
         .with_state(state);
@@ -41,12 +59,12 @@ pub async fn run_admin_server(config: AppConfig) -> Result<()> {
         .await?
         .pool()
         .clone();
-    let app = admin_router(pool);
+    let runtime = Arc::new(MultiBotRuntime::from_config(config.clone()).await?);
+    let app = admin_router_with_runtime(pool, Some(runtime), QrUrlStore::new());
     let bind = std::env::var("WECHATBOT_ADMIN_BIND").unwrap_or(config.admin.bind.clone());
     serve_bind(app, &bind).await
 }
 
-/// Serve admin using an existing Postgres pool (skips opening a new connection from config).
 pub async fn run_admin_repository_pool(pool: PgPool, bind: &str) -> Result<()> {
     let app = admin_router(pool);
     serve_bind(app, bind).await

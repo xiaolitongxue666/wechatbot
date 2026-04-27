@@ -130,3 +130,67 @@ a:hover { color: var(--accent-hover); text-decoration: underline; }
   gap: 1rem;
   margin: 1rem 0;
 }
+
+.bot-form {
+  max-width: 420px;
+}
+.form-group {
+  margin-bottom: 0.75rem;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.form-group input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.error-msg {
+  color: #e74c3c;
+  padding: 0.5rem;
+  border: 1px solid #e74c3c;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.qr-section {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  max-width: 400px;
+}
+.qr-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+.qr-img {
+  display: block;
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px;
+}
+.qr-waiting {
+  margin-top: 1.5rem;
+  font-style: italic;
+}
+button.btn {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border: none;
+}
