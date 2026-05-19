@@ -3,7 +3,7 @@
 # 一键启动开发环境：容器 → 迁移 → 种子 → 管理后台
 # 默认会灌入种子数据，方便开发演示
 #
-# Usage: start.sh [--no-seed] [--no-admin]
+# Usage: start.sh [--no-seed] [--no-admin] [--with-worker]
 # ==============================================================================
 set -euo pipefail
 
@@ -12,17 +12,20 @@ source "${SCRIPT_DIR}/_common.sh"
 
 DO_SEED=true
 DO_ADMIN=true
+DO_WORKER=false
 
 # 解析参数
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-seed)  DO_SEED=false; shift ;;
         --no-admin) DO_ADMIN=false; shift ;;
+        --with-worker) DO_WORKER=true; shift ;;
         --help|-h)
-            echo "Usage: $(basename "$0") [--no-seed] [--no-admin]"
+            echo "Usage: $(basename "$0") [--no-seed] [--no-admin] [--with-worker]"
             echo ""
             echo "  --no-seed    Skip seeding test data"
             echo "  --no-admin   Skip starting admin server"
+            echo "  --with-worker Start forwarder worker after admin startup"
             exit 0
             ;;
         *) shift ;;
@@ -37,6 +40,7 @@ echo ""
 log_info "Checking prerequisites..."
 require_cmd docker "install Docker Desktop"
 require_cmd cargo  "install Rust from https://rustup.rs"
+require_cmd bun "install Bun from https://bun.sh"
 log_ok "Prerequisites satisfied"
 
 # ── 第2步：启动后台容器 ────────────────────────────────────────────────────────
@@ -60,9 +64,14 @@ fi
 # ── 第5步：启动管理后台 ────────────────────────────────────────────────────────
 if $DO_ADMIN; then
     log_step "Step 4/4: Starting admin server"
-    bash "${SCRIPT_DIR}/admin.sh" start
+    bash "${SCRIPT_DIR}/dev/start_backend.sh"
 else
     log_info "Admin server skipped (use --no-admin)"
+fi
+
+if $DO_WORKER; then
+    log_step "Starting forwarder worker"
+    bash "${SCRIPT_DIR}/dev/start_worker.sh"
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -71,7 +80,7 @@ echo "========================================"
 echo "  ${COLOR_BOLD}WeChatBot Dev Environment Ready${COLOR_NC}"
 echo "========================================"
 echo "  Admin:        ${COLOR_GREEN}${ADMIN_URL}/admin${COLOR_NC}"
-echo "  Overview API: ${COLOR_CYAN}${ADMIN_URL}/api/overview${COLOR_NC}"
+echo "  Overview API: ${COLOR_CYAN}${ADMIN_URL}/admin/api/overview${COLOR_NC}"
 echo "  Database:     postgres://localhost:5432/wechatbot"
 echo "  Redis:        redis://localhost:6379"
 echo "  MinIO:        http://localhost:9001 (console)"

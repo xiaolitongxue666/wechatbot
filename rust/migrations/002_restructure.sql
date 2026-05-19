@@ -15,10 +15,23 @@ CREATE TABLE IF NOT EXISTS bots (
 );
 
 -- Step 2: Migrate existing bot_sessions rows into bots (session_id → bot_id)
-INSERT INTO bots (bot_id, status, last_heartbeat_at, created_at, updated_at)
-SELECT session_id, status, last_heartbeat_at, created_at, updated_at
-FROM bot_sessions
-ON CONFLICT (bot_id) DO NOTHING;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'bot_sessions'
+          AND column_name = 'last_heartbeat_at'
+    ) THEN
+        EXECUTE $sql$
+            INSERT INTO bots (bot_id, status, last_heartbeat_at, created_at, updated_at)
+            SELECT session_id, status, last_heartbeat_at, created_at, updated_at
+            FROM bot_sessions
+            ON CONFLICT (bot_id) DO NOTHING
+        $sql$;
+    END IF;
+END $$;
 
 -- Step 3: Drop old bot_sessions table and recreate as per-user sessions
 DROP TABLE IF EXISTS bot_sessions CASCADE;

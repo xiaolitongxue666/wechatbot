@@ -5,9 +5,10 @@ use crate::queue::EventQueue;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
+use tracing::{info, warn};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -46,6 +47,12 @@ impl ForwarderWorker {
         loop {
             let payload = self.queue.consume().await?;
             let envelope: EventEnvelope = serde_json::from_str(&payload)?;
+            info!(
+                event_id = %envelope.event_id,
+                session_id = %envelope.session_id,
+                bot_id = %envelope.bot_id,
+                "forward event consumed"
+            );
             if let Err(error) = self.forward_with_retry(&envelope).await {
                 self.write_dlq(&envelope, &payload, &error.to_string()).await?;
             }
@@ -53,6 +60,23 @@ impl ForwarderWorker {
     }
 
     pub async fn forward_with_retry(&self, envelope: &EventEnvelope) -> Result<()> {
+        if !self.can_forward(envelope).await? {
+            self.write_forward_state(
+                &envelope.event_id,
+                &envelope.session_id,
+                "blocked",
+                0,
+                Some("forwarding blocked by policy".to_string()),
+            )
+            .await?;
+            warn!(
+                event_id = %envelope.event_id,
+                bot_id = %envelope.bot_id,
+                target = %self.config.target_label,
+                "forwarding blocked by policy"
+            );
+            return Ok(());
+        }
         if self.is_already_succeeded(&envelope.event_id).await? {
             return Ok(());
         }
@@ -188,6 +212,41 @@ impl ForwarderWorker {
         .await
         .map_err(|error| WeChatBotError::Other(format!("query forward status failed: {error}")))?;
         Ok(matches!(status.as_deref(), Some("success")))
+    }
+
+    async fn can_forward(&self, envelope: &EventEnvelope) -> Result<bool> {
+        let Some(pool) = &self.pg_pool else {
+            return Ok(true);
+        };
+
+        let row = sqlx::query(
+            r#"
+            SELECT forwarding_enabled, allowed_targets
+            FROM bot_forward_policies
+            WHERE bot_id = $1
+            LIMIT 1
+            "#,
+        )
+        .bind(&envelope.bot_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|error| WeChatBotError::Other(format!("query forward policy failed: {error}")))?;
+
+        let Some(row) = row else {
+            return Ok(true);
+        };
+        let forwarding_enabled: bool = row
+            .try_get("forwarding_enabled")
+            .map_err(|error| WeChatBotError::Other(format!("read forwarding_enabled failed: {error}")))?;
+        if !forwarding_enabled {
+            return Ok(false);
+        }
+        let allowed_targets: Vec<String> = row
+            .try_get("allowed_targets")
+            .map_err(|error| WeChatBotError::Other(format!("read allowed_targets failed: {error}")))?;
+        Ok(allowed_targets
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(&self.config.target_label)))
     }
 }
 

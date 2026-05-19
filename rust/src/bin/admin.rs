@@ -1,9 +1,9 @@
 use std::path::PathBuf;
-use wechatbot::{run_admin_server, AppConfig};
+use wechatbot::{infra::logging::init_tracing, run_admin_server, AppConfig};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    init_tracing("admin");
     let config_path = std::env::var("WECHATBOT_CONFIG").unwrap_or_else(|_| {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("config/app.toml")

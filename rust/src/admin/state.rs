@@ -8,6 +8,7 @@ pub struct AdminState {
     pub repo: AdminRepository,
     pub runtime: Option<Arc<MultiBotRuntime>>,
     pub qr_store: QrUrlStore,
+    pub default_admin_api_token: String,
     pub admin_host: String,
     pub admin_port: u16,
     pub session_online_timeout_secs: u64,

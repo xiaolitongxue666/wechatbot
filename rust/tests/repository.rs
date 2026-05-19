@@ -168,10 +168,9 @@ async fn overview_with_seeded_data() {
 
     assert!(overview.total_bots >= 1, "total_bots should be >= 1");
     assert!(overview.messages_today >= 25, "messages_today should be >= 25");
-    assert!(overview.forward_dlq_count >= 2, "forward_dlq_count should be >= 2");
     assert!(
-        overview.forward_not_success_count >= 2,
-        "forward_not_success_count should be >= 2"
+        overview.forward_failures_today >= 3,
+        "forward_failures_today should be >= 3"
     );
 }
 
@@ -195,6 +194,25 @@ async fn list_bots_returns_all() {
         bots.len() >= 1,
         "expected >= 1 bots, got: {}",
         bots.len()
+    );
+
+    let bot_001 = bots
+        .iter()
+        .find(|bot| bot.bot_id == "bot-001")
+        .expect("bot-001 should exist in seeded dataset");
+    assert_eq!(bot_001.messages_today, 12, "bot-001 messages_today mismatch");
+    assert_eq!(
+        bot_001.forward_failures_today, 2,
+        "bot-001 forward_failures_today mismatch"
+    );
+
+    let bot_004 = bots
+        .iter()
+        .find(|bot| bot.bot_id == "bot-004")
+        .expect("bot-004 should exist in seeded dataset");
+    assert_eq!(
+        bot_004.forward_failures_today, 1,
+        "bot-004 forward_failures_today mismatch"
     );
 }
 

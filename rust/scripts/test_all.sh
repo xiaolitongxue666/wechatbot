@@ -76,7 +76,7 @@ log_ok "All tests complete"
 echo ""
 echo "  ${COLOR_GREEN}unit tests      - always run${COLOR_NC}"
 echo "  ${COLOR_GREEN}integration tests - run against test DB${COLOR_NC}"
-echo "  ${COLOR_GREEN}frontend tests   - run against test DB${COLOR_NC}"
+echo "  ${COLOR_GREEN}frontend e2e     - run separately in web-admin${COLOR_NC}"
 echo ""
 
 # cleanup 在 trap EXIT 时自动执行

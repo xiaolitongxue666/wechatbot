@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use tokio::time::{sleep, Duration};
-use wechatbot::{BotOptions, WeChatBot};
+use wechatbot::{infra::logging::init_tracing, BotOptions, WeChatBot};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    init_tracing("echo_bot");
 
     let bot = Arc::new(WeChatBot::new(BotOptions {
         on_qr_url: Some(Box::new(|url| {

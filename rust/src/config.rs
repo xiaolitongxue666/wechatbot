@@ -42,25 +42,38 @@ pub struct MediaConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForwarderConfig {
     pub endpoint: String,
+    #[serde(default = "default_forward_target_label")]
+    pub target_label: String,
     pub hmac_secret: String,
     pub max_retries: u32,
     pub timeout_ms: u64,
+}
+
+fn default_forward_target_label() -> String {
+    "webhook".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdminConfig {
     #[serde(default = "default_admin_bind")]
     pub bind: String,
+    #[serde(default = "default_admin_api_token")]
+    pub api_token: String,
 }
 
 fn default_admin_bind() -> String {
     "127.0.0.1:8787".into()
 }
 
+fn default_admin_api_token() -> String {
+    "dev-admin-token".into()
+}
+
 impl Default for AdminConfig {
     fn default() -> Self {
         Self {
             bind: default_admin_bind(),
+            api_token: default_admin_api_token(),
         }
     }
 }
@@ -232,6 +245,12 @@ impl AppConfig {
                 self.runtime.typing_trigger_ms = parsed;
             }
         }
+        if let Ok(value) = std::env::var("WECHATBOT_ADMIN_BIND") {
+            self.admin.bind = value;
+        }
+        if let Ok(value) = std::env::var("WECHATBOT_ADMIN_API_TOKEN") {
+            self.admin.api_token = value;
+        }
     }
 }
 
@@ -287,6 +306,7 @@ mod tests {
             },
             forwarder: ForwarderConfig {
                 endpoint: "http://127.0.0.1/webhook".into(),
+                target_label: "webhook".into(),
                 hmac_secret: "secret".into(),
                 max_retries: 3,
                 timeout_ms: 1000,

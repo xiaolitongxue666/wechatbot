@@ -19,7 +19,7 @@ usage() {
     echo "Usage: $(basename "$0") {migrate|seed|clear|reset|status}"
     echo ""
     echo "  migrate   Apply SQL migrations to create tables"
-    echo "  seed      Insert sample data (5 bots, 30 msgs, 3 fwd, 2 dlq)"
+    echo "  seed      Insert sample data (5 bots, 30 msgs, 5 fwd, 2 dlq)"
     echo "  clear     Truncate all tables (keep schema)"
     echo "  reset     Clear + migrate (reset to fresh schema)"
     echo "  status    Show row counts for each table"
@@ -65,14 +65,14 @@ ON CONFLICT (bot_id) DO UPDATE SET
   last_heartbeat_at = EXCLUDED.last_heartbeat_at,
   updated_at = NOW();
 
--- 5 个 bot_sessions
+-- 5 个 bot_sessions（bot-001 有两个会话，便于展示 bot 级聚合差异）
 INSERT INTO bot_sessions (session_id, bot_id, user_id, status, created_at, updated_at)
 VALUES
   ('sess-001', 'bot-001', 'wx_alice',   'active', NOW(), NOW()),
-  ('sess-002', 'bot-002', 'wx_bob',     'active', NOW(), NOW()),
-  ('sess-003', 'bot-003', 'wx_charlie', 'active', NOW(), NOW()),
-  ('sess-004', 'bot-004', 'wx_dave',    'active', NOW(), NOW()),
-  ('sess-005', 'bot-005', 'wx_eve',     'active', NOW(), NOW())
+  ('sess-002', 'bot-001', 'wx_bob',     'active', NOW(), NOW()),
+  ('sess-003', 'bot-002', 'wx_charlie', 'active', NOW(), NOW()),
+  ('sess-004', 'bot-003', 'wx_dave',    'active', NOW(), NOW()),
+  ('sess-005', 'bot-004', 'wx_eve',     'active', NOW(), NOW())
 ON CONFLICT (session_id) DO UPDATE SET
   bot_id = EXCLUDED.bot_id,
   user_id = EXCLUDED.user_id,
@@ -111,12 +111,14 @@ SELECT
 FROM generate_series(1, 30) AS s(i)
 ON CONFLICT (message_id) DO NOTHING;
 
--- 3 条 forward_events (1 success + 1 failed + 1 retrying)
+-- 5 条 forward_events（其中 1 条为昨日失败，用于校验“今日失败”过滤）
 INSERT INTO forward_events (event_id, session_id, target_service, status, retry_count, last_error, updated_at)
 VALUES
-  ('evt-dlq-001',      'sess-001', 'http://localhost:8081/webhook/wechat', 'failed',    5, 'connection timeout',           NOW()),
-  ('evt-success-001',  'sess-001', 'http://localhost:8081/webhook/wechat', 'success',   1, NULL,                           NOW()),
-  ('evt-retrying-001', 'sess-002', 'http://localhost:8081/webhook/wechat', 'retrying',  2, '500 internal server error',   NOW())
+  ('evt-dlq-001',              'sess-001', 'http://localhost:8081/webhook/wechat', 'failed',   5, 'connection timeout',           NOW()),
+  ('evt-success-001',          'sess-001', 'http://localhost:8081/webhook/wechat', 'success',  1, NULL,                           NOW()),
+  ('evt-retrying-001',         'sess-002', 'http://localhost:8081/webhook/wechat', 'retrying', 2, '500 internal server error',   NOW()),
+  ('evt-blocked-001',          'sess-005', 'http://localhost:8081/webhook/wechat', 'blocked',  1, 'target blocked by policy',    NOW()),
+  ('evt-failed-yesterday-001', 'sess-003', 'http://localhost:8081/webhook/wechat', 'failed',   1, 'yesterday failure',            NOW() - INTERVAL '30 hours')
 ON CONFLICT (event_id) DO NOTHING;
 
 -- 2 条 forward_dlq (永久失败)
@@ -126,15 +128,42 @@ VALUES
   ('evt-dlq-permanent-002', 'sess-002', '{"type":"image","url":"x"}'::jsonb,    'webhook unreachable',               NOW())
 ON CONFLICT (event_id) DO NOTHING;
 
+-- admin users + scopes + forwarding policies
+INSERT INTO admin_users (user_id, display_name, role, api_token_hash, is_active, created_at, updated_at)
+VALUES
+  ('admin-default', 'Default Admin', 'admin', '1734d503f6aa6a047c36d113cbad769f719c93784b469b771c4c3e7c63adbefd', TRUE, NOW(), NOW()),
+  ('viewer-demo',   'Viewer Demo',   'viewer', 'd036bd6d01a1cae081d39a2f8dab751dc042de814fd60df31fcb553170950f29', TRUE, NOW(), NOW())
+ON CONFLICT (user_id) DO UPDATE SET
+  role = EXCLUDED.role,
+  api_token_hash = EXCLUDED.api_token_hash,
+  is_active = TRUE,
+  updated_at = NOW();
+
+INSERT INTO admin_user_bot_scopes (user_id, bot_id)
+VALUES
+  ('viewer-demo', 'bot-001'),
+  ('viewer-demo', 'bot-002')
+ON CONFLICT (user_id, bot_id) DO NOTHING;
+
+INSERT INTO bot_forward_policies (bot_id, forwarding_enabled, allowed_targets, updated_at)
+VALUES
+  ('bot-001', TRUE,  ARRAY['webhook']::TEXT[], NOW()),
+  ('bot-002', FALSE, ARRAY['webhook']::TEXT[], NOW()),
+  ('bot-003', TRUE,  ARRAY['coze']::TEXT[], NOW())
+ON CONFLICT (bot_id) DO UPDATE SET
+  forwarding_enabled = EXCLUDED.forwarding_enabled,
+  allowed_targets = EXCLUDED.allowed_targets,
+  updated_at = NOW();
+
 SQL
 
-    log_ok "Seed data inserted (5 bots, 30 messages, 3 forward events, 2 DLQ entries)"
+    log_ok "Seed data inserted (bots/messages/forwards/admin users/policies)"
 }
 
 # ── clear ──────────────────────────────────────────────────────────────────────
 cmd_clear() {
     log_step "Clearing all table data..."
-    psql_exec "$DB_URL" "TRUNCATE TABLE forward_dlq, forward_events, chat_media, chat_messages, bot_sessions CASCADE;"
+    psql_exec "$DB_URL" "TRUNCATE TABLE admin_user_bot_scopes, admin_users, bot_forward_policies, forward_dlq, forward_events, chat_media, chat_messages, bot_sessions, bots CASCADE;"
     log_ok "All tables cleared"
 }
 
@@ -164,7 +193,7 @@ cmd_status() {
         return 1
     fi
 
-    for table in bot_sessions chat_messages chat_media forward_events forward_dlq; do
+    for table in bots bot_sessions chat_messages chat_media forward_events forward_dlq admin_users admin_user_bot_scopes bot_forward_policies; do
         local count
         count=$(psql_exec_select "$DB_URL" "SELECT count(*) FROM ${table}" 2>/dev/null || echo "?")
         # 对齐输出

@@ -13,6 +13,8 @@ use wechatbot::admin_router;
 use common::db::setup_test_db;
 use common::fixtures::seed_medium_dataset;
 
+const ADMIN_AUTH_HEADER: &str = "Bearer dev-admin-token";
+
 static SETUP_MUTEX: Mutex<()> = Mutex::new(());
 static mut SEEDED: bool = false;
 
@@ -56,7 +58,7 @@ async fn root_redirects_to_admin() {
 }
 
 #[tokio::test]
-async fn dashboard_default_zh_dark() {
+async fn admin_root_serves_spa_shell() {
     let app = get_app().await;
     let res = app
         .oneshot(
@@ -69,136 +71,15 @@ async fn dashboard_default_zh_dark() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
+    let content = String::from_utf8_lossy(&body);
     assert!(
-        html.contains("theme-dark"),
-        "expected dark theme, got: {html}"
-    );
-    assert!(
-        html.contains("zh-CN") || html.contains("仪表盘"),
-        "expected Chinese UI, got: {html}"
+        content.contains("<!doctype html>") || content.contains("<!DOCTYPE html>"),
+        "unexpected admin shell payload: {content}"
     );
 }
 
 #[tokio::test]
-async fn dashboard_en_light_query() {
-    let app = get_app().await;
-    let res = app
-        .oneshot(
-            Request::builder()
-                .uri("/admin?lang=en&theme=light")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains("theme-light"),
-        "expected light theme, got: {html}"
-    );
-    assert!(
-        html.contains("lang=\"en\""),
-        "expected English lang attribute, got: {html}"
-    );
-    assert!(
-        html.contains("Dashboard"),
-        "expected English content, got: {html}"
-    );
-}
-
-#[tokio::test]
-async fn bot_list_has_seeded_bots() {
-    let app = get_app().await;
-    let res = app
-        .oneshot(
-            Request::builder()
-                .uri("/admin/bots")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = res.status();
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
-    assert_eq!(status, StatusCode::OK, "unexpected status: {status}, body: {html}");
-    assert!(
-        html.contains("bot-001"),
-        "expected bot-001 in bot list: {html}"
-    );
-    assert!(
-        html.contains("bot-003"),
-        "expected bot-003 in bot list: {html}"
-    );
-    assert!(
-        html.contains("bot-005"),
-        "expected bot-005 in bot list: {html}"
-    );
-    assert!(
-        html.contains("在线") || html.contains("Online") || html.contains("online"),
-        "expected status text: {html}"
-    );
-    assert!(
-        html.contains("离线") || html.contains("Offline") || html.contains("offline"),
-        "expected offline text: {html}"
-    );
-}
-
-#[tokio::test]
-async fn bot_detail_valid_bot() {
-    let app = get_app().await;
-    let res = app
-        .oneshot(
-            Request::builder()
-                .uri("/admin/bots/bot-001")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = res.status();
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
-    assert_eq!(status, StatusCode::OK, "unexpected status: {status}, body: {html}");
-    assert!(
-        html.contains("bot-001"),
-        "expected bot-001 in detail: {html}"
-    );
-    assert!(html.contains("在线") || html.contains("online"), "expected online status: {html}");
-    assert!(
-        html.contains("id=\"delete-button\""),
-        "expected delete button on detail page: {html}"
-    );
-}
-
-#[tokio::test]
-async fn bot_detail_without_runtime_hides_start_button() {
-    let app = get_app().await;
-    let res = app
-        .oneshot(
-            Request::builder()
-                .uri("/admin/bots/bot-002")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = res.status();
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
-
-    assert_eq!(status, StatusCode::OK, "unexpected status: {status}, body: {html}");
-    assert!(
-        !html.contains("id=\"start-button\""),
-        "expected no start button when runtime is unavailable: {html}"
-    );
-}
-
-#[tokio::test]
-async fn bot_detail_nonexistent_404() {
+async fn spa_history_fallback_route_works() {
     let app = get_app().await;
     let res = app
         .oneshot(
@@ -209,16 +90,23 @@ async fn bot_detail_nonexistent_404() {
         )
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8_lossy(&body);
+    assert!(
+        html.contains("<!doctype html>") || html.contains("<!DOCTYPE html>"),
+        "unexpected fallback payload: {html}"
+    );
 }
 
 #[tokio::test]
-async fn bot_history_with_messages() {
+async fn api_bot_list_json() {
     let app = get_app().await;
     let res = app
         .oneshot(
             Request::builder()
-                .uri("/admin/bots/sess-001/history")
+                .uri("/admin/api/bots")
+                .header("authorization", ADMIN_AUTH_HEADER)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -226,49 +114,40 @@ async fn bot_history_with_messages() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
-    let html = String::from_utf8_lossy(&body);
-    assert!(
-        html.contains("sess-001") || html.contains("hello world") || html.contains("user_alice"),
-        "expected seed data in history: {html}"
-    );
+    let parsed: serde_json::Value = serde_json::from_slice(&body).expect("should be valid JSON");
+    let rows = parsed["bots"].as_array().expect("bots should be array");
+    assert!(!rows.is_empty(), "expected non-empty bots list");
+    for row in rows {
+        assert!(row["bot_id"].as_str().is_some(), "bot_id should exist");
+        assert!(
+            row["messages_today"].as_i64().is_some(),
+            "messages_today should be number"
+        );
+        assert!(
+            row["forward_failures_today"].as_i64().is_some(),
+            "forward_failures_today should be number"
+        );
+    }
 }
 
 #[tokio::test]
-async fn bot_delete_route_redirects_to_list() {
+async fn api_bot_detail_json() {
     let app = get_app().await;
     let res = app
         .oneshot(
             Request::builder()
-                .method("POST")
-                .uri("/admin/bots/bot-005/delete")
+                .uri("/admin/api/bots/bot-001")
+                .header("authorization", ADMIN_AUTH_HEADER)
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    let location = res
-        .headers()
-        .get("location")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    assert!(location.starts_with("/admin/bots"), "unexpected redirect: {location}");
-}
-
-#[tokio::test]
-async fn bot_history_nonexistent_404() {
-    let app = get_app().await;
-    let res = app
-        .oneshot(
-            Request::builder()
-                .uri("/admin/bots/ghost-session/history")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let parsed: serde_json::Value = serde_json::from_slice(&body).expect("should be valid JSON");
+    assert_eq!(parsed["bot_id"].as_str(), Some("bot-001"));
+    assert!(parsed["sessions"].is_array(), "sessions should be array");
 }
 
 #[tokio::test]
@@ -278,6 +157,7 @@ async fn api_overview_json() {
         .oneshot(
             Request::builder()
                 .uri("/admin/api/overview")
+                .header("authorization", ADMIN_AUTH_HEADER)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -291,12 +171,69 @@ async fn api_overview_json() {
     let total_bots = parsed["total_bots"].as_i64().unwrap();
     let online_bots = parsed["online_bots"].as_i64().unwrap();
     let messages_today = parsed["messages_today"].as_i64().unwrap();
-    let dlq_count = parsed["forward_dlq_count"].as_i64().unwrap();
-    let non_success = parsed["forward_not_success_count"].as_i64().unwrap();
+    let forward_failures_today = parsed["forward_failures_today"].as_i64().unwrap();
 
     assert!(total_bots >= 1, "expected >= 1 total bots, got: {total_bots}");
     assert!(online_bots >= 1, "expected >= 1 online bots, got: {online_bots}");
     assert!(messages_today >= 25, "expected >= 25 messages, got: {messages_today}");
-    assert!(dlq_count >= 2, "expected >= 2 DLQ entries, got: {dlq_count}");
-    assert!(non_success >= 2, "expected >= 2 non-success forwards, got: {non_success}");
+    assert!(
+        forward_failures_today >= 3,
+        "expected >= 3 today non-success forwards, got: {forward_failures_today}"
+    );
+}
+
+#[tokio::test]
+async fn api_forward_policy_json() {
+    let app = get_app().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/admin/api/bots/bot-001/forward-policy")
+                .header("authorization", ADMIN_AUTH_HEADER)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&body).expect("forward policy should be valid JSON");
+    assert_eq!(parsed["bot_id"].as_str(), Some("bot-001"));
+}
+
+#[tokio::test]
+async fn api_session_history_json() {
+    let app = get_app().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/admin/api/sessions/sess-001/history?page=1&page_size=10")
+                .header("authorization", ADMIN_AUTH_HEADER)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let parsed: serde_json::Value = serde_json::from_slice(&body).expect("history should be valid JSON");
+    assert_eq!(parsed["session_id"].as_str(), Some("sess-001"));
+    assert!(parsed["rows"].is_array(), "rows should be array");
+}
+
+#[tokio::test]
+async fn api_overview_rejects_invalid_token() {
+    let app = get_app().await;
+    let res = app
+        .oneshot(
+            Request::builder()
+                .uri("/admin/api/overview")
+                .header("authorization", "Bearer invalid-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }

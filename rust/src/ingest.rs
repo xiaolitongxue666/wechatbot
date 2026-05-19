@@ -7,6 +7,7 @@ use crate::types::IncomingMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use tracing::{debug, info};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +66,13 @@ impl MessageIngestor {
                 .unwrap_or_default(),
         };
         self.repository.save_message(&event).await?;
+        info!(
+            event_id = %event.event_id,
+            session_id = %event.session_id,
+            bot_id = %event.bot_id,
+            content_type = %event.content_type,
+            "message ingested"
+        );
 
         if let Some(downloaded_media) = bot.download(message).await? {
             let stored_media = self
@@ -91,6 +99,12 @@ impl MessageIngestor {
                 }),
             };
             self.repository.save_media(&media_record).await?;
+        } else {
+            debug!(
+                event_id = %event.event_id,
+                session_id = %event.session_id,
+                "message has no downloadable media payload"
+            );
         }
 
         self.event_queue

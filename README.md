@@ -344,7 +344,7 @@ curl -fsSL https://...wechatbot/main/install.sh | bash -s -- --version v0.1.0
 
 ## 🖥️ Rust 管理后台
 
-Rust SDK 内置 Web 管理后台，基于 Axum + Askama 构建，提供完整的 Bot 生命周期管理。
+Rust SDK 内置 Web 管理后台，当前为 Axum + Vue3 SPA 架构（前后端解耦），提供完整的 Bot 生命周期管理。
 
 **一键启动：**
 ```bash
@@ -352,17 +352,21 @@ cd rust
 bash scripts/start.sh
 
 # 启动后访问 http://127.0.0.1:8787/admin
+# 注意：`?lang=...&theme=...` 参数已不再作为服务端页面渲染开关
 ```
 
-**页面功能：**
+**管理端 API（前端通过 JSON API 调用）：**
 
 | 路由 | 功能 |
 |------|------|
-| `/admin` | 概览仪表盘：Bot 总数、在线数、心跳、消息量、死信队列 |
-| `/admin/bots` | Bot 列表，状态一目了然，快速操作入口 |
-| `/admin/bots/{id}` | Bot 详情：启动/停止按钮、二维码登录 |
-| `/admin/bots/{id}/history` | 分页对话历史（30 条/页） |
-| `/admin/api/overview` | JSON API，供监控系统消费 |
+| `/admin` | Vue SPA 入口（管理页面） |
+| `/admin/api/overview` | 概览指标 |
+| `/admin/api/bots` | Bot 列表 / 创建 Bot |
+| `/admin/api/bots/{id}` | Bot 详情 / 删除 Bot |
+| `/admin/api/bots/{id}/start` | 启动 Bot |
+| `/admin/api/bots/{id}/stop` | 停止 Bot |
+| `/admin/api/bots/{id}/forward-policy` | 读取/更新转发策略 |
+| `/admin/api/sessions/{session_id}/history` | 分页会话历史 |
 
 **基础设施（docker-compose.dev.yml）：**
 

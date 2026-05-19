@@ -35,6 +35,7 @@ pub struct ForwardEventData {
     pub status: String,
     pub retry_count: i32,
     pub last_error: Option<String>,
+    pub updated_at: chrono::DateTime<Utc>,
 }
 
 pub struct DlqEntryData {
@@ -131,6 +132,7 @@ impl<'a> TestFixtures<'a> {
                 status: "retrying".to_string(),
                 retry_count: 0,
                 last_error: None,
+                updated_at: Utc::now(),
             },
         }
     }
@@ -235,7 +237,7 @@ impl<'a> TestFixtures<'a> {
                 r#"
                 INSERT INTO forward_events (
                     event_id, session_id, target_service, status, retry_count, last_error, updated_at
-                ) VALUES ($1,$2,$3,$4,$5,$6,NOW())
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7)
                 ON CONFLICT (event_id) DO NOTHING
                 "#,
             )
@@ -245,6 +247,7 @@ impl<'a> TestFixtures<'a> {
             .bind(&fe.status)
             .bind(fe.retry_count)
             .bind(&fe.last_error)
+            .bind(fe.updated_at)
             .execute(self.pool)
             .await
             .expect("failed to insert forward event fixture");
@@ -348,6 +351,16 @@ impl ForwardEventBuilder {
         self.data.last_error = Some(error.to_string());
         self
     }
+
+    pub fn updated_at_minutes_ago(mut self, minutes: i64) -> Self {
+        self.data.updated_at = Utc::now() - Duration::minutes(minutes);
+        self
+    }
+
+    pub fn updated_at_hours_ago(mut self, hours: i64) -> Self {
+        self.data.updated_at = Utc::now() - Duration::hours(hours);
+        self
+    }
 }
 
 impl DlqEntryBuilder {
@@ -439,10 +452,24 @@ pub async fn seed_medium_dataset(pool: &PgPool) {
         .retry_count(2)
         .error("500 internal server error")
         .finish();
+    let fe4 = TestFixtures::forward_event("evt-blocked-001", "sess-005")
+        .status("blocked")
+        .retry_count(1)
+        .error("target blocked by policy")
+        .updated_at_minutes_ago(2)
+        .finish();
+    let fe5 = TestFixtures::forward_event("evt-failed-yesterday-001", "sess-003")
+        .status("failed")
+        .retry_count(1)
+        .error("yesterday failure")
+        .updated_at_hours_ago(30)
+        .finish();
 
     fixtures.add_forward_event(fe1);
     fixtures.add_forward_event(fe2);
     fixtures.add_forward_event(fe3);
+    fixtures.add_forward_event(fe4);
+    fixtures.add_forward_event(fe5);
 
     let dlq1 = TestFixtures::dlq_entry("evt-dlq-permanent-001", "sess-001")
         .error("permanent failure after 5 retries")
@@ -455,4 +482,68 @@ pub async fn seed_medium_dataset(pool: &PgPool) {
     fixtures.add_dlq_entry(dlq2);
 
     fixtures.apply().await;
+    seed_admin_rbac(pool).await;
+}
+
+pub async fn seed_admin_rbac(pool: &PgPool) {
+    sqlx::query(
+        r#"
+        INSERT INTO bots (bot_id, bot_name, status, created_at, updated_at)
+        VALUES
+            ('bot-001', 'seed-bot-001', 'online', NOW(), NOW()),
+            ('bot-002', 'seed-bot-002', 'offline', NOW(), NOW()),
+            ('bot-003', 'seed-bot-003', 'offline', NOW(), NOW())
+        ON CONFLICT (bot_id) DO NOTHING
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("failed to insert bot rows for admin scope fixture");
+
+    sqlx::query(
+        r#"
+        INSERT INTO admin_users (user_id, display_name, role, api_token_hash, is_active, created_at, updated_at)
+        VALUES
+            ('admin-default', 'Default Admin', 'admin', $1, TRUE, NOW(), NOW()),
+            ('viewer-demo', 'Viewer Demo', 'viewer', $2, TRUE, NOW(), NOW())
+        ON CONFLICT (user_id) DO UPDATE
+        SET role = EXCLUDED.role,
+            api_token_hash = EXCLUDED.api_token_hash,
+            is_active = TRUE,
+            updated_at = NOW()
+        "#,
+    )
+    .bind("1734d503f6aa6a047c36d113cbad769f719c93784b469b771c4c3e7c63adbefd")
+    .bind("d036bd6d01a1cae081d39a2f8dab751dc042de814fd60df31fcb553170950f29")
+    .execute(pool)
+    .await
+    .expect("failed to insert admin users fixture");
+
+    sqlx::query(
+        r#"
+        INSERT INTO admin_user_bot_scopes (user_id, bot_id)
+        VALUES ('viewer-demo', 'bot-001'), ('viewer-demo', 'bot-002')
+        ON CONFLICT (user_id, bot_id) DO NOTHING
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("failed to insert admin scope fixture");
+
+    sqlx::query(
+        r#"
+        INSERT INTO bot_forward_policies (bot_id, forwarding_enabled, allowed_targets, updated_at)
+        VALUES
+            ('bot-001', TRUE, ARRAY['webhook']::TEXT[], NOW()),
+            ('bot-002', FALSE, ARRAY['webhook']::TEXT[], NOW()),
+            ('bot-003', TRUE, ARRAY['coze']::TEXT[], NOW())
+        ON CONFLICT (bot_id) DO UPDATE
+        SET forwarding_enabled = EXCLUDED.forwarding_enabled,
+            allowed_targets = EXCLUDED.allowed_targets,
+            updated_at = NOW()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .expect("failed to insert forward policy fixture");
 }

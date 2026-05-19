@@ -11,6 +11,8 @@ RUST_DIR="$(cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")" && pwd)"
 SCRIPT_DIR="${RUST_DIR}/scripts"
 MIGRATION_DIR="${RUST_DIR}/migrations"
 CONFIG_FILE="${RUST_DIR}/config/app.toml"
+WEB_ADMIN_DIR="${RUST_DIR}/web-admin"
+WEB_ADMIN_DIST_DIR="${WEB_ADMIN_DIR}/dist"
 
 # Docker Compose 文件
 COMPOSE_DEV="${RUST_DIR}/docker-compose.dev.yml"
@@ -27,12 +29,17 @@ ADMIN_PORT="${ADMIN_PORT:-8787}"
 ADMIN_URL="http://${ADMIN_HOST}:${ADMIN_PORT}"
 ADMIN_PID_FILE="${RUST_DIR}/.admin.pid"
 ADMIN_LOG_FILE="${RUST_DIR}/.admin.log"
+WORKER_PID_FILE="${RUST_DIR}/.worker.pid"
+WORKER_LOG_FILE="${RUST_DIR}/.worker.log"
 ADMIN_BIN_REL="target/debug/admin"
+WORKER_BIN_REL="target/debug/worker"
 # Windows 下二进制文件带 .exe 后缀，unix 下不带
 if [[ "${OSTYPE:-}" == msys || "${OSTYPE:-}" == cygwin || "${OSTYPE:-}" == win32 ]]; then
     ADMIN_BIN_REL="target/debug/admin.exe"
+    WORKER_BIN_REL="target/debug/worker.exe"
 fi
 ADMIN_BIN="${RUST_DIR}/${ADMIN_BIN_REL}"
+WORKER_BIN="${RUST_DIR}/${WORKER_BIN_REL}"
 
 # ── 颜色定义 ─────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -158,4 +165,15 @@ psql_exec() {
     else
         docker exec -i postgres psql -U postgres -d wechatbot -c "$sql"
     fi
+}
+
+require_free_port() {
+    local port="$1"
+    if command -v lsof &>/dev/null && lsof -iTCP:"${port}" -sTCP:LISTEN -t &>/dev/null; then
+        local owner_pid
+        owner_pid=$(lsof -iTCP:"${port}" -sTCP:LISTEN -t | head -n 1)
+        log_err "port ${port} is already in use by pid ${owner_pid}"
+        return 1
+    fi
+    return 0
 }

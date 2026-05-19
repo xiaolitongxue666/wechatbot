@@ -1,10 +1,10 @@
-//! HTTP admin dashboard (Axum + Askama).
+//! HTTP admin dashboard (Axum + Vue SPA + JSON API).
 
+mod auth;
 mod handlers;
 pub mod qr;
 pub mod repository;
 mod server;
 mod state;
-mod ui;
 
 pub use server::{admin_router, admin_router_with_runtime, run_admin_repository_pool, run_admin_server};

@@ -22,10 +22,19 @@ usage() {
 }
 
 # ── 构建 (如需要) ─────────────────────────────────────────────────────────────
-# 检测二进制文件是否存在，不存在则编译
+# 检测源码/配置是否比二进制更新；若更新则重新编译
 ensure_built() {
-    if [[ -f "$ADMIN_BIN" ]]; then
-        log_info "Admin binary found (skip build)"
+    local need_build=false
+    if [[ ! -f "$ADMIN_BIN" ]]; then
+        need_build=true
+    elif [[ "$RUST_DIR/src" -nt "$ADMIN_BIN" ]] || \
+         [[ "$RUST_DIR/Cargo.toml" -nt "$ADMIN_BIN" ]] || \
+         [[ "$RUST_DIR/Cargo.lock" -nt "$ADMIN_BIN" ]]; then
+        need_build=true
+    fi
+
+    if [[ "$need_build" == false ]]; then
+        log_info "Admin binary up to date (skip build)"
         return 0
     fi
 
@@ -38,6 +47,22 @@ ensure_built() {
         exit 1
     fi
     log_ok "Admin binary built"
+}
+
+ensure_web_admin_built() {
+    if [[ ! -d "$WEB_ADMIN_DIR" ]]; then
+        log_warn "web-admin directory not found, skip frontend build"
+        return 0
+    fi
+    require_cmd bun "install Bun from https://bun.sh"
+    log_step "Building Vue admin frontend..."
+    cd "$WEB_ADMIN_DIR"
+    bun install --frozen-lockfile
+    bun run build
+    if [[ ! -f "${WEB_ADMIN_DIST_DIR}/index.html" ]]; then
+        log_err "Frontend build failed: ${WEB_ADMIN_DIST_DIR}/index.html not found"
+        exit 1
+    fi
 }
 
 # ── start ──────────────────────────────────────────────────────────────────────
@@ -59,7 +84,9 @@ cmd_start() {
 
     # 确保二进制存在；需要数据库就绪
     ensure_built
+    ensure_web_admin_built
     require_cmd curl "needed for health check"
+    require_free_port "$ADMIN_PORT"
 
     log_step "Starting admin server..."
     cd "$RUST_DIR"
@@ -69,12 +96,12 @@ cmd_start() {
 
     # 等待服务就绪
     if wait_for_http "$ADMIN_URL/healthz" 60 2; then
-        echo ""
-        echo "  ${COLOR_BOLD}${COLOR_GREEN}Admin:  ${ADMIN_URL}/admin${COLOR_NC}"
-        echo "  ${COLOR_BOLD}${COLOR_GREEN}API:    ${ADMIN_URL}/api/overview${COLOR_NC}"
-        echo "  ${COLOR_BOLD}${COLOR_CYAN}PID:    ${pid}${COLOR_NC}"
-        echo "  ${COLOR_BOLD}Logs:   ${ADMIN_LOG_FILE}${COLOR_NC}"
-        echo ""
+        printf "\n"
+        printf "%b\n" "  ${COLOR_BOLD}${COLOR_GREEN}Admin:  ${ADMIN_URL}/admin${COLOR_NC}"
+        printf "%b\n" "  ${COLOR_BOLD}${COLOR_GREEN}API:    ${ADMIN_URL}/admin/api/overview${COLOR_NC}"
+        printf "%b\n" "  ${COLOR_BOLD}${COLOR_CYAN}PID:    ${pid}${COLOR_NC}"
+        printf "%b\n" "  ${COLOR_BOLD}Logs:   ${ADMIN_LOG_FILE}${COLOR_NC}"
+        printf "\n"
     else
         log_err "Admin server failed to start"
         cmd_stop

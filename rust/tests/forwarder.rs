@@ -20,7 +20,7 @@ fn sample_envelope() -> EventEnvelope {
         event_id: Uuid::new_v4().to_string(),
         message_id: Uuid::new_v4().to_string(),
         session_id: format!("session-{}", Uuid::new_v4()),
-        bot_id: "test-bot".to_string(),
+        bot_id: format!("test-bot-{}", Uuid::new_v4()),
         from_user_id: "user_x".to_string(),
         to_user_id: String::new(),
         content_type: "text".to_string(),
@@ -44,6 +44,7 @@ async fn forwarder_success_sets_forward_state() {
     let queue = Arc::new(InMemoryEventQueue::with_capacity(4));
     let config = ForwarderConfig {
         endpoint: format!("{}/webhook", mock_server.uri()),
+        target_label: "webhook".to_string(),
         hmac_secret: "test-secret".to_string(),
         max_retries: 3,
         timeout_ms: 2000,
@@ -92,6 +93,7 @@ async fn forwarder_retry_then_success() {
     let queue = Arc::new(InMemoryEventQueue::with_capacity(4));
     let config = ForwarderConfig {
         endpoint: format!("{}/webhook", mock_server.uri()),
+        target_label: "webhook".to_string(),
         hmac_secret: "test-secret".to_string(),
         max_retries: 3,
         timeout_ms: 2000,
@@ -129,6 +131,7 @@ async fn forwarder_all_fail_writes_dlq() {
     let queue = Arc::new(InMemoryEventQueue::with_capacity(4));
     let config = ForwarderConfig {
         endpoint: format!("{}/webhook", mock_server.uri()),
+        target_label: "webhook".to_string(),
         hmac_secret: "test-secret".to_string(),
         max_retries: 2,
         timeout_ms: 2000,
@@ -178,6 +181,7 @@ async fn forwarder_skips_already_succeeded() {
     let queue = Arc::new(InMemoryEventQueue::with_capacity(4));
     let config = ForwarderConfig {
         endpoint: format!("{}/webhook", mock_server.uri()),
+        target_label: "webhook".to_string(),
         hmac_secret: "test-secret".to_string(),
         max_retries: 3,
         timeout_ms: 2000,
@@ -220,4 +224,56 @@ async fn hmac_signature_length_valid() {
     mac2.update(&payload);
     let sig2 = hex::encode(mac2.finalize().into_bytes());
     assert_eq!(sig, sig2, "same payload + key should produce same signature");
+}
+
+#[tokio::test]
+async fn forwarder_respects_blocked_policy() {
+    let db = setup_test_db().await;
+    let pool = db.pool().clone();
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/webhook"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&mock_server)
+        .await;
+
+    let envelope = sample_envelope();
+
+    sqlx::query(
+        "INSERT INTO bots (bot_id, bot_name, status, created_at, updated_at) VALUES ($1, $2, 'offline', NOW(), NOW()) ON CONFLICT (bot_id) DO NOTHING",
+    )
+    .bind(&envelope.bot_id)
+    .bind(&envelope.bot_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO bot_forward_policies (bot_id, forwarding_enabled, allowed_targets, updated_at) VALUES ($1, FALSE, ARRAY['webhook']::TEXT[], NOW())",
+    )
+    .bind(&envelope.bot_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let queue = Arc::new(InMemoryEventQueue::with_capacity(4));
+    let config = ForwarderConfig {
+        endpoint: format!("{}/webhook", mock_server.uri()),
+        target_label: "webhook".to_string(),
+        hmac_secret: "test-secret".to_string(),
+        max_retries: 2,
+        timeout_ms: 2000,
+    };
+    let forwarder = ForwarderWorker::new(queue.clone() as Arc<dyn EventQueue>, config)
+        .with_postgres_pool(pool.clone());
+    let result = forwarder.forward_with_retry(&envelope).await;
+    assert!(result.is_ok(), "blocked policy should not return error");
+    let status: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM forward_events WHERE event_id = $1",
+    )
+    .bind(&envelope.event_id)
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status.as_deref(), Some("blocked"));
 }

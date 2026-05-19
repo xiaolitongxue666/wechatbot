@@ -1,10 +1,10 @@
 //! Run from `rust/`: `cargo run --example multi_bot_runtime`
 
-use wechatbot::{AppConfig, MultiBotRuntime};
+use wechatbot::{infra::logging::init_tracing, AppConfig, MultiBotRuntime};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    init_tracing("multi_bot_runtime");
     let config = AppConfig::load_from_file("config/app.toml")
         .await
         .expect("load config failed");

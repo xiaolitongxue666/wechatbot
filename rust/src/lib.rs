@@ -22,11 +22,13 @@
 
 pub mod admin;
 pub mod bot;
+pub mod core;
 pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod forwarder;
 pub mod ingest;
+pub mod infra;
 pub mod protocol;
 pub mod queue;
 pub mod runtime;

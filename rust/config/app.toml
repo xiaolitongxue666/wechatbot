@@ -20,6 +20,7 @@ secret_key = "minioadmin"
 
 [forwarder]
 endpoint = "http://127.0.0.1:8081/webhook/wechat"
+target_label = "webhook"
 hmac_secret = "replace-with-strong-secret"
 max_retries = 5
 timeout_ms = 3000
