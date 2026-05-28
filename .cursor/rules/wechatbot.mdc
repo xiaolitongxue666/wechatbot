@@ -1,0 +1,56 @@
+---
+description: WeChatBot 仓库规范与验证命令
+globs:
+alwaysApply: true
+---
+
+# WeChatBot（本仓库）
+
+完整规范：[docs/AGENTS.md](../../docs/AGENTS.md)  
+项目记忆（非全局）：[docs/rust/agent-memory.md](../../docs/rust/agent-memory.md)  
+排障：[docs/rust/troubleshooting.md](../../docs/rust/troubleshooting.md)
+
+## 目录（2026-05 v2）
+
+| 路径 | 用途 |
+|------|------|
+| 仓库根 | Rust 主工程（`cargo`、`src/`） |
+| `admin/web/` | Vue 管理前端（非 `wechat_official`） |
+| `deploy/` | docker-compose |
+| `tools/scripts/` | 运维脚本（`_common.sh` → `PROJECT_ROOT`） |
+| `docs/` | 唯一文档根（`docs/rust/` = Rust 运维） |
+
+**勿用已删除路径：** `rust/`、`scripts/`、`web-admin/`、`doc/`、`wechat_official/`。
+
+## 修改后验证
+
+| 改了什么 | 跑什么 |
+|----|-----|
+| `src/`、`Cargo.toml` | `cargo build && cargo test --lib` |
+| `admin/web/` | 先 `npm run build`，再 `bash tools/scripts/test/run_e2e.sh` |
+| 后端 + 集成 | 先 build 前端，再 `bash tools/scripts/test/run_backend_tests.sh` |
+| `reference-sdks/nodejs` | `cd reference-sdks/nodejs && npx vitest run` |
+
+## 易卡死 / 勿前台久等
+
+- `test_all.sh`：Docker + 全量集成，耗时可数分钟 → 正常，非 hang
+- Playwright：勿依赖内嵌 `webServer` → 用 `bash tools/scripts/test/run_e2e.sh`（preview 后台 + 自动清理）
+
+## 高频踩坑
+
+| 现象 | 处理 |
+|------|------|
+| `/admin` 404，`/healthz` 200 | `tools/scripts/admin.sh stop`，重建 dist，重启 |
+| `admin_frontend` SPA 404 | 先 `cd admin/web && npm run build` |
+| Windows 编译 admin.exe 被拒 | 先 `admin.sh stop` |
+| `.env` 仍写 `./web-admin/dist` | 改为 `./admin/web/dist` |
+
+## 默认不要动
+
+- `legacy/`、`reference-sdks/`（除非用户明确要求）
+- 不要提交 `.env`、`.admin.log`、`admin/web/dist`、`target/`、`**/dist/`、`**/*.exe`
+
+## Admin
+
+- URL: http://127.0.0.1:8787/admin
+- 启动: `bash tools/scripts/admin.sh start`（需 `admin/web/dist`、PG/Redis）

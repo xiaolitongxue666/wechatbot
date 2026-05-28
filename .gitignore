@@ -1,23 +1,73 @@
+# Dependencies & build output
 node_modules/
 dist/
 tmp/
-.DS_Store
-*.tsbuildinfo
-.next/
-next-env.d.ts
 target/
 target-test/
 package-lock.json
+*.tsbuildinfo
+
+# Python
 __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
+.venv/
+venv/
 
-# Rust runtime files
-.admin.pid
-.admin.log
+# Reference / legacy package managers
+reference-sdks/**/node_modules/
+reference-sdks/**/dist/
+reference-sdks/python/.venv/
+legacy/**/node_modules/
+
+# Reference SDK local build artifacts
+reference-sdks/**/*.exe
+
+# Admin web UI
+admin/web/node_modules/
+admin/web/dist/
+admin/web/test-results/
+admin/web/playwright-report/
+admin/web/undefined/
+admin/web/.bun-cache/
+
+# Docker / local data volumes
 data/
 
-# Binary build artifacts
+# Environment & secrets (never commit)
+.env
+.env.local
+.env.*.local
+credentials.json
+**/.wechatbot/
+
+# Runtime logs & PIDs (repo root + legacy paths)
+*.log
+*.pid
+.admin.pid
+.admin.log
+.worker.pid
+.worker.log
+.e2e-preview.pid
+.e2e-preview.log
+
+# Local binary artifacts
 *.exe
 
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.next/
+next-env.d.ts
+
+# Cursor: keep shared project rules only
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+
+# Pi / npm local caches (if created at root)
+.npm/
+.bun/

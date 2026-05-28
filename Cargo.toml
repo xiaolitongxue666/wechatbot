@@ -1,0 +1,66 @@
+[package]
+name = "wechatbot"
+version = "0.1.0"
+edition = "2021"
+description = "WeChat iLink Bot SDK for Rust"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/corespeed-io/wechatbot"
+homepage = "https://github.com/corespeed-io/wechatbot"
+documentation = "https://docs.rs/wechatbot"
+
+[dependencies]
+aes = "0.8"
+base64 = "0.22"
+hex = "0.4"
+md-5 = "0.10"
+rand = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_repr = "0.1"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+urlencoding = "2"
+dirs-next = "2"
+async-trait = "0.1"
+toml = "0.8"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "json", "uuid", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+redis = { version = "0.27", features = ["tokio-comp"] }
+sha2 = "0.10"
+hmac = "0.12"
+time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+dotenvy = "0.15"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1", features = ["full"] }
+http-body-util = "0.1"
+wiremock = "0.6"
+tempfile = "3"
+reqwest = { version = "0.12", features = ["json"] }
+
+[[bin]]
+name = "admin"
+path = "src/bin/admin.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[[example]]
+name = "echo_bot"
+path = "examples/echo_bot.rs"
+
+[[example]]
+name = "multi_bot_runtime"
+path = "examples/multi_bot_runtime.rs"

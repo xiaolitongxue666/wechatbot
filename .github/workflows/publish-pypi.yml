@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: python
+        working-directory: reference-sdks/python
     environment:
       name: ${{ inputs.dry_run == 'true' && 'testpypi' || 'pypi' }}
       url: ${{ inputs.dry_run == 'true' && 'https://test.pypi.org/p/wechatbot-sdk' || 'https://pypi.org/p/wechatbot-sdk' }}
@@ -59,11 +59,11 @@ jobs:
         if: inputs.dry_run == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: python/dist/
+          packages-dir: reference-sdks/python/dist/
           repository-url: https://test.pypi.org/legacy/
 
       - name: Publish to PyPI
         if: inputs.dry_run != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: python/dist/
+          packages-dir: reference-sdks/python/dist/

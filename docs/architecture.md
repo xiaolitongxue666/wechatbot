@@ -1,5 +1,7 @@
 # Architecture
 
+> 全仓架构对照（多语言）。Rust 运维细节见 [`rust/`](rust/README.md)；协议见 [`protocol.md`](protocol.md)。
+
 WeChatBot is a **multi-language SDK** for building WeChat bots using the **WeChat iLink Bot API** — an official Tencent interface for programmatic WeChat messaging. Its goal is to connect any AI agent or application to WeChat in minutes.
 
 A companion **Pi Agent** extension bridges the [Pi coding assistant](https://github.com/badlogic/pi-mono) with WeChat, enabling AI-powered coding conversations directly from the WeChat app.
@@ -25,104 +27,29 @@ The **Rust SDK** goes beyond a client library to provide a **multi-bot server in
 ## Project Structure
 
 ```
-wechatbot/
-├── README.md
-├── README.EN.MD
-├── trouble_shot.md
-├── install.sh                 # Unix/macOS one-line installer
-├── install.ps1                # Windows one-line installer (PowerShell)
+wechatbot/                     # Rust 主工程（仓库根）
+├── Cargo.toml, src/, config/, migrations/, tests/, examples/
+├── admin/web/                 # Vue 管理前端
+├── deploy/                    # docker-compose（PG/Redis/MinIO）
+├── tools/scripts/, tools/skill/
 │
-├── docs/                      # Shared documentation
-│   ├── protocol.md            # iLink Bot API protocol reference
-│   └── architecture.md        # This file
+├── docs/                      # 文档
+│   ├── protocol.md
+│   ├── architecture.md        # This file
+│   └── rust/                  # Rust 运维文档
 │
-├── nodejs/                    # Node.js SDK — @wechatbot/wechatbot
-│   ├── package.json
-│   ├── src/
-│   │   ├── index.ts           # Public API re-exports
-│   │   ├── core/              # WeChatBot client, TypedEventEmitter, errors
-│   │   ├── transport/         # HTTP client with retry logic
-│   │   ├── protocol/          # Wire types (CDNMedia, WireMessage), ILinkApi
-│   │   ├── auth/              # QR login, credential management
-│   │   ├── messaging/         # Poller, Sender, Typing, Context store
-│   │   ├── media/             # AES crypto, CDN up/down, MIME, voice, URLs, markdown
-│   │   ├── middleware/         # Express-style middleware engine + builtins
-│   │   ├── message/           # Message parser, builder (chainable API), types
-│   │   ├── storage/           # Pluggable storage: File, Memory, interface
-│   │   └── logger/            # Structured logging with pluggable transports
-│   ├── tests/                 # 69 unit tests (vitest)
-│   └── examples/
+├── reference-sdks/            # 参考语言实现
+│   ├── nodejs/                # @wechatbot/wechatbot
+│   ├── python/                # wechatbot-sdk
+│   └── golang/                # Go module
 │
-├── python/                    # Python SDK — wechatbot-sdk
-│   ├── pyproject.toml
-│   ├── wechatbot/
-│   │   ├── __init__.py        # Public exports
-│   │   ├── client.py          # WeChatBot (login, start, reply, send, download, upload)
-│   │   ├── protocol.py        # Raw iLink API calls
-│   │   ├── auth.py            # QR login + credential persistence
-│   │   ├── types.py           # All types as dataclasses + IntEnums
-│   │   ├── errors.py          # Error hierarchy
-│   │   └── crypto.py          # AES-128-ECB encrypt/decrypt
-│   ├── examples/
-│   └── tests/
+├── legacy/                    # 附属/实验项目（非主工程）
+│   ├── pi-agent/              # @wechatbot/pi-agent
+│   ├── ai-app/                # 遗留 Python AI 应用
+│   ├── devtools-bookmark/     # Chrome DevTools 扩展
+│   └── webchat/               # 静态聊天 Demo
 │
-├── golang/                    # Go SDK — stdlib only
-│   ├── go.mod
-│   ├── types.go               # All public types
-│   ├── bot.go                 # Bot client (Login, Run, Reply, Send, Download, Upload)
-│   ├── internal/
-│   │   ├── protocol/api.go    # iLink HTTP client
-│   │   ├── auth/login.go      # QR login + credential management
-│   │   └── crypto/aes.go      # AES-128-ECB
-│   └── examples/
-│
-├── rust/                      # Rust SDK + Multi-Bot Server
-│   ├── Cargo.toml
-│   ├── config/app.toml        # Default app configuration
-│   ├── .env.example
-│   ├── migrations/001_init.sql  # DB schema (sessions, messages, media, events, DLQ)
-│   ├── docker-compose.dev.yml
-│   ├── docker-compose.test.yml
-│   ├── src/
-│   │   ├── lib.rs             # Crate root: re-exports public API
-│   │   ├── bot.rs             # WeChatBot client
-│   │   ├── types.rs           # Serde types (WireMessage, CDNMedia, etc.)
-│   │   ├── error.rs           # thiserror Error enum
-│   │   ├── protocol.rs        # ILinkClient: raw HTTP calls
-│   │   ├── crypto.rs          # AES-128-ECB, key generation
-│   │   ├── config.rs          # AppConfig (TOML + env override)
-│   │   ├── session.rs         # BotSessionManager: lifecycle management
-│   │   ├── runtime.rs         # MultiBotRuntime: orchestrates sessions + services
-│   │   ├── ingest.rs          # MessageIngestor: normalize → EventEnvelope → store + queue
-│   │   ├── forwarder.rs       # ForwarderWorker: consume queue, HMAC-sign, forward with retry
-│   │   ├── queue.rs           # EventQueue trait + InMemory + Redis implementations
-│   │   ├── storage/
-│   │   │   ├── mod.rs         # ChatRepository & SessionStateRepository traits
-│   │   │   ├── postgres.rs    # PostgresChatRepository
-│   │   │   ├── redis_state.rs # RedisSessionStateRepository
-│   │   │   └── media.rs       # MediaStore trait + LocalFs + S3 implementations
-│   │   ├── admin/
-│   │   │   ├── mod.rs
-│   │   │   ├── server.rs      # Axum web server
-│   │   │   ├── state.rs       # AdminState (shared app state)
-│   │   │   ├── repository.rs  # Postgres read queries for dashboard
-│   │   │   ├── ui.rs          # Askama template rendering
-│   │   │   ├── qr.rs          # QR URL store
-│   │   │   └── handlers/      # Dashboard, bot list/detail/create/start/stop, healthz
-│   │   └── bin/admin.rs       # Admin server binary entry point
-│   ├── examples/
-│   ├── templates/admin/       # Askama HTML templates
-│   ├── static/admin/          # CSS
-│   └── tests/
-│
-├── pi-agent/                  # Pi Extension — @wechatbot/pi-agent
-│   ├── package.json
-│   ├── src/
-│   │   ├── index.ts           # Extension: /wechat command, QR login, bidirectional bridge
-│   │   └── qrcode-terminal.d.ts
-│   └── tsconfig.json
-│
-└── .github/workflows/         # CI/CD
+└── .github/workflows/
 ```
 
 ---
@@ -250,12 +177,12 @@ Multi-level configuration system:
 
 | Entry Point | Location | Description |
 |---|---|---|
-| **Node.js SDK** | `nodejs/src/index.ts` | `import { WeChatBot } from '@wechatbot/wechatbot'` |
-| **Python SDK** | `python/wechatbot/__init__.py` | `from wechatbot import WeChatBot` |
-| **Go SDK** | `golang/bot.go` | `import wechatbot "github.com/corespeed-io/wechatbot/golang"` |
-| **Rust Library** | `rust/src/lib.rs` | `use wechatbot::{WeChatBot, BotOptions}` |
-| **Rust Admin Binary** | `rust/src/bin/admin.rs` | `cargo run --bin admin` |
-| **Pi Agent** | `pi-agent/src/index.ts` | `pi install npm:@wechatbot/pi-agent` |
+| **Node.js SDK** | `reference-sdks/nodejs/src/index.ts` | `import { WeChatBot } from '@wechatbot/wechatbot'` |
+| **Python SDK** | `reference-sdks/python/wechatbot/__init__.py` | `from wechatbot import WeChatBot` |
+| **Go SDK** | `reference-sdks/golang/bot.go` | `import wechatbot "github.com/corespeed-io/wechatbot/golang"` |
+| **Rust Library** | `src/lib.rs` | `use wechatbot::{WeChatBot, BotOptions}` |
+| **Rust Admin Binary** | `src/bin/admin.rs` | `cargo run --bin admin` |
+| **Pi Agent** | `legacy/pi-agent/src/index.ts` | `pi install npm:@wechatbot/pi-agent` |
 | **Prebuilt Binary** | GitHub Releases | Download via `install.sh` / `install.ps1` |
 
 ---

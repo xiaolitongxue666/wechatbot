@@ -9,23 +9,23 @@ This project has two publishable packages with separate GitHub Actions workflows
 
 | Package | Registry | Directory | Workflow | Tag pattern |
 |---------|----------|-----------|----------|-------------|
-| `@wechatbot/wechatbot` | npm | `nodejs/` | `.github/workflows/publish-npm.yml` | `node-v*` |
-| `@wechatbot/pi-agent` | npm | `pi-agent/` | `.github/workflows/publish-pi-agent.yml` | `pi-agent-v*` |
-| `wechatbot-sdk` | PyPI | `python/` | `.github/workflows/publish-pypi.yml` | `py-v*` |
+| `@wechatbot/wechatbot` | npm | `reference-sdks/nodejs/` | `.github/workflows/publish-npm.yml` | `node-v*` |
+| `@wechatbot/pi-agent` | npm | `legacy/pi-agent/` | `.github/workflows/publish-pi-agent.yml` | `pi-agent-v*` |
+| `wechatbot-sdk` | PyPI | `reference-sdks/python/` | `.github/workflows/publish-pypi.yml` | `py-v*` |
 
 ## Pre-publish Checklist
 
 Before publishing, verify the following:
 
 1. **Version is bumped** — ensure the version in the package manifest is updated:
-   - npm: `nodejs/package.json` → `"version"` field
-   - PyPI: `python/pyproject.toml` → `[project] version` field
+   - npm: `reference-sdks/nodejs/package.json` → `"version"` field
+   - PyPI: `reference-sdks/python/pyproject.toml` → `[project] version` field
 2. **Tests pass** — run tests locally before tagging:
-   - npm: `cd nodejs && npm test`
-   - PyPI: `cd python && pytest`
+   - npm: `cd reference-sdks/nodejs && npm test`
+   - PyPI: `cd reference-sdks/python && pytest`
 3. **Build succeeds** — verify the package builds cleanly:
-   - npm: `cd nodejs && npm run build`
-   - PyPI: `cd python && python -m build`
+   - npm: `cd reference-sdks/nodejs && npm run build`
+   - PyPI: `cd reference-sdks/python && python -m build`
 4. **Changes are committed and pushed** to the main branch
 
 ## Publishing via Git Tag
@@ -35,9 +35,9 @@ Create and push a tag to trigger the GitHub Actions workflow:
 ### Publish Node.js to npm
 
 ```bash
-# 1. Bump version in nodejs/package.json
+# 1. Bump version in reference-sdks/nodejs/package.json
 # 2. Commit the change
-git add nodejs/package.json
+git add reference-sdks/nodejs/package.json
 git commit -m "chore: bump node package to vX.Y.Z"
 git push
 
@@ -49,9 +49,9 @@ git push origin node-vX.Y.Z
 ### Publish Python to PyPI
 
 ```bash
-# 1. Bump version in python/pyproject.toml
+# 1. Bump version in reference-sdks/python/pyproject.toml
 # 2. Commit the change
-git add python/pyproject.toml
+git add reference-sdks/python/pyproject.toml
 git commit -m "chore: bump python package to vX.Y.Z"
 git push
 
@@ -81,7 +81,7 @@ OIDC Trusted Publishing **cannot** be used for the very first publish of a packa
 2. **Login locally**: `npm login`
 3. **Publish manually** from the package directory:
    ```bash
-   cd nodejs
+   cd reference-sdks/nodejs
    npm publish --access public
    ```
 4. After the first version is live, configure Trusted Publishing (see below) for all subsequent releases
@@ -99,7 +99,7 @@ Option B — Manual publish:
 1. Create a PyPI account and generate an API token at [pypi.org](https://pypi.org/) → Account settings → API tokens
 2. Publish locally:
    ```bash
-   cd python
+   cd reference-sdks/python
    python -m build
    twine upload dist/*
    ```
@@ -176,7 +176,7 @@ Rust crates are published to [crates.io](https://crates.io/). Unlike npm/PyPI, c
 3. Login locally: `cargo login <token>`
 4. Publish:
    ```bash
-   cd rust
+   # 仓库根目录
    cargo publish
    ```
 

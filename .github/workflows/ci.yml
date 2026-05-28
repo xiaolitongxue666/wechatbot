@@ -16,7 +16,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
-        working-directory: nodejs
+        working-directory: reference-sdks/nodejs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,7 +37,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
-        working-directory: python
+        working-directory: reference-sdks/python
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,7 +55,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
-        working-directory: golang
+        working-directory: reference-sdks/golang
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -76,8 +76,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust
+          workspaces: .
       - run: cargo build
-        working-directory: rust
-      - run: cargo test
-        working-directory: rust
+      - run: cargo test --lib

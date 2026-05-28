@@ -41,7 +41,7 @@ jobs:
           go-version: '1.22'
 
       - name: Build
-        working-directory: golang
+        working-directory: reference-sdks/golang
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -87,20 +87,19 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
 
       - name: Build
-        working-directory: rust
         run: cargo build --release --target ${{ matrix.target }} --example echo_bot
 
       - name: Copy artifact (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          cp rust/target/${{ matrix.target }}/release/examples/echo_bot dist/${{ matrix.artifact }}
+          cp target/${{ matrix.target }}/release/examples/echo_bot dist/${{ matrix.artifact }}
 
       - name: Copy artifact (Windows)
         if: runner.os == 'Windows'
         run: |
           mkdir dist
-          copy rust\target\${{ matrix.target }}\release\examples\echo_bot.exe dist\${{ matrix.artifact }}
+          copy target\${{ matrix.target }}\release\examples\echo_bot.exe dist\${{ matrix.artifact }}
 
       - uses: actions/upload-artifact@v4
         with:
