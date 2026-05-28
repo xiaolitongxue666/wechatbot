@@ -13,6 +13,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 RUST_DIR="${PROJECT_ROOT}"  # backward-compat alias used by older scripts
 MIGRATION_DIR="${PROJECT_ROOT}/migrations"
 CONFIG_FILE="${PROJECT_ROOT}/config/app.toml"
+NEXTEST_CONFIG_FILE="${PROJECT_ROOT}/config/nextest.toml"
 WEB_ADMIN_DIR="${PROJECT_ROOT}/admin/web"
 WEB_ADMIN_DIST_DIR="${WEB_ADMIN_DIR}/dist"
 

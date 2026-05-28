@@ -35,7 +35,7 @@ log_step "=== Running Unit Tests ==="
 
 if $USE_NEXTEST && cargo nextest --version &>/dev/null; then
     log_info "Using cargo-nextest"
-    cargo nextest run
+    cargo nextest run --config-file "${NEXTEST_CONFIG_FILE}"
 else
     if $USE_NEXTEST; then
         log_warn "cargo-nextest not installed (install: cargo install cargo-nextest --locked)"

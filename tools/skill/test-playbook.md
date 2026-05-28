@@ -29,6 +29,7 @@ bash tools/scripts/test_all.sh
 ### nextest 不存在
 
 - 现象：脚本提示 `cargo-nextest not installed`。
+- 配置：`config/nextest.toml`（与 `config/app.toml` 同目录）
 - 处理：
   - 安装：`cargo install cargo-nextest --locked`
   - 或使用：`bash tools/scripts/test.sh --no-nextest`

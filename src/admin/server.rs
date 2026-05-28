@@ -56,7 +56,6 @@ pub fn admin_router_with_runtime(
         session_online_timeout_secs,
         qr_expire_secs,
     };
-    let static_dir = static_dir();
     let web_admin_dist_dir = web_admin_dist_dir();
     let admin_api = Router::new()
         .route("/overview", get(overview_json))
@@ -91,7 +90,6 @@ pub fn admin_router_with_runtime(
         .route("/healthz", get(healthz))
         .nest("/admin", admin)
         .merge(public)
-        .nest_service("/static", ServeDir::new(static_dir))
         .layer(TraceLayer::new_for_http())
 }
 
@@ -170,13 +168,6 @@ async fn shutdown_signal() {
             tracing::info!("received SIGTERM, shutting down gracefully");
         }
     }
-}
-
-fn static_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("WECHATBOT_ADMIN_STATIC_DIR") {
-        return PathBuf::from(dir);
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static")
 }
 
 fn web_admin_dist_dir() -> PathBuf {

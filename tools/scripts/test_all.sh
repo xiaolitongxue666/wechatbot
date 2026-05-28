@@ -64,7 +64,7 @@ export WECHATBOT_TEST_DATABASE_URL="$DB_TEST_URL"
 cd "$RUST_DIR"
 if cargo nextest --version &>/dev/null; then
     log_info "Using cargo-nextest"
-    cargo nextest run --profile ci
+    cargo nextest run --config-file "${NEXTEST_CONFIG_FILE}" --profile ci
 else
     log_info "Using cargo test (install cargo-nextest for faster: cargo install cargo-nextest --locked)"
     cargo test
