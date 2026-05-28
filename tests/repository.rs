@@ -206,13 +206,13 @@ async fn list_bots_returns_all() {
         "bot-001 forward_failures_today mismatch"
     );
 
-    let bot_004 = bots
+    let bot_005 = bots
         .iter()
-        .find(|bot| bot.bot_id == "bot-004")
-        .expect("bot-004 should exist in seeded dataset");
+        .find(|bot| bot.bot_id == "bot-005")
+        .expect("bot-005 should exist in seeded dataset");
     assert_eq!(
-        bot_004.forward_failures_today, 1,
-        "bot-004 forward_failures_today mismatch"
+        bot_005.forward_failures_today, 1,
+        "bot-005 forward_failures_today mismatch"
     );
 }
 

@@ -11,7 +11,7 @@
 
 ## 文档结构
 
-- `architecture.md`：系统架构与模块分层
+- `architecture.md`：**前后端技术栈**、系统架构、模块分层、HTTP 路由、数据流
 - `configuration.md`：配置项说明与环境变量
 - `deployment.md`：部署方式与环境准备
 - `operations.md`：运维与日常操作手册
@@ -53,9 +53,10 @@
 
 ### 启动与开发
 
-- `bash tools/scripts/start.sh`
-- `bash tools/scripts/start.sh --no-seed`
-- `bash tools/scripts/start.sh --no-admin`
+- `bash tools/scripts/start.sh` — dev，带 mock 种子（默认）
+- `bash tools/scripts/start.sh --deploy` — 部署，不 seed
+- `bash tools/scripts/start_all.sh [--dev|--deploy]`
+- `bash tools/scripts/start.sh --no-seed` — 同 `--deploy`
 - `bash tools/scripts/dev.sh`
 - `cargo run --bin admin`
 

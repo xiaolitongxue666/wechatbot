@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 一键启动开发环境：容器 → 迁移 → 种子 → 管理后台
-# 默认会灌入种子数据，方便开发演示
+# 一键启动开发/测试环境：容器 → 迁移 → [可选 mock 种子] → 管理后台
 #
-# Usage: start.sh [--no-seed] [--no-admin] [--with-worker]
+# 两种启动模式：
+#   --dev     测试/本地演示：迁移 + 灌入 mock 数据（默认）
+#   --deploy  部署/生产：仅迁移，不灌 mock 数据
+#
+# Usage: start.sh [--dev|--deploy] [--no-admin] [--with-worker]
 # ==============================================================================
 set -euo pipefail
 
@@ -14,18 +17,20 @@ DO_SEED=true
 DO_ADMIN=true
 DO_WORKER=false
 
-# 解析参数
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --no-seed)  DO_SEED=false; shift ;;
+        --dev|--with-seed) DO_SEED=true; shift ;;
+        --deploy|--no-seed) DO_SEED=false; shift ;;
         --no-admin) DO_ADMIN=false; shift ;;
         --with-worker) DO_WORKER=true; shift ;;
         --help|-h)
-            echo "Usage: $(basename "$0") [--no-seed] [--no-admin] [--with-worker]"
+            echo "Usage: $(basename "$0") [--dev|--deploy] [--no-admin] [--with-worker]"
             echo ""
-            echo "  --no-seed    Skip seeding test data"
-            echo "  --no-admin   Skip starting admin server"
-            echo "  --with-worker Start forwarder worker after admin startup"
+            echo "Modes:"
+            start_mode_help
+            echo ""
+            echo "  --no-admin     Skip starting admin server"
+            echo "  --with-worker  Start forwarder worker after admin"
             exit 0
             ;;
         *) shift ;;
@@ -33,7 +38,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ══════════════════════════════════════════════════════════════════════════════
-log_step "=== WeChatBot Dev Environment Startup ==="
+log_step "=== WeChatBot Environment Startup ==="
+log_start_mode "$DO_SEED"
 echo ""
 
 # ── 第1步：检查前置条件 ────────────────────────────────────────────────────────
@@ -51,15 +57,9 @@ bash "${SCRIPT_DIR}/services.sh" up
 log_step "Step 2/4: Waiting for PostgreSQL"
 wait_for_pg "$DB_DEV_URL" 60 2
 
-# ── 第4步：数据库迁移 ──────────────────────────────────────────────────────────
+# ── 第4步：数据库迁移（dev 含 seed，deploy 不含）──────────────────────────────
 log_step "Step 3/4: Setting up database"
-bash "${SCRIPT_DIR}/db.sh" migrate
-
-if $DO_SEED; then
-    bash "${SCRIPT_DIR}/db.sh" seed
-else
-    log_info "Seed data skipped (use --no-seed)"
-fi
+apply_db_migrate_and_optional_seed "$DO_SEED"
 
 # ── 第5步：启动管理后台 ────────────────────────────────────────────────────────
 if $DO_ADMIN; then
@@ -77,7 +77,11 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 echo ""
 echo "========================================"
-echo "  ${COLOR_BOLD}WeChatBot Dev Environment Ready${COLOR_NC}"
+if $DO_SEED; then
+    echo "  ${COLOR_BOLD}WeChatBot Dev/Test Ready (with mock data)${COLOR_NC}"
+else
+    echo "  ${COLOR_BOLD}WeChatBot Deploy Ready (no mock data)${COLOR_NC}"
+fi
 echo "========================================"
 echo "  Admin:        ${COLOR_GREEN}${ADMIN_URL}/admin${COLOR_NC}"
 echo "  Overview API: ${COLOR_CYAN}${ADMIN_URL}/admin/api/overview${COLOR_NC}"

@@ -180,3 +180,32 @@ require_free_port() {
     fi
     return 0
 }
+
+# ── 启动模式：dev（带 mock 种子）vs deploy（不灌种）──────────────────────────
+start_mode_help() {
+    cat <<'EOF'
+  --dev         Dev/test mode: migrate + seed mock data (default)
+  --deploy      Deploy mode: migrate only, no mock seed
+  --with-seed   Same as --dev
+  --no-seed     Same as --deploy
+EOF
+}
+
+log_start_mode() {
+    local do_seed="$1"
+    if [[ "$do_seed" == "true" ]]; then
+        log_info "Start mode: DEV — mock seed (bot-001..006, sessions, messages)"
+    else
+        log_info "Start mode: DEPLOY — no mock seed (empty business data after migrate)"
+    fi
+}
+
+apply_db_migrate_and_optional_seed() {
+    local do_seed="$1"
+    bash "${SCRIPT_DIR}/db.sh" migrate
+    if [[ "$do_seed" == "true" ]]; then
+        bash "${SCRIPT_DIR}/db.sh" seed
+    else
+        log_info "Skipping db.sh seed (deploy mode)"
+    fi
+}

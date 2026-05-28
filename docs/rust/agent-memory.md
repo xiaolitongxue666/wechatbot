@@ -73,6 +73,15 @@ cd reference-sdks/nodejs && npx vitest run
 
 ## 问题与解法总表（2026-05 重组 + 测试）
 
+### 启动与数据
+
+| 场景 | 命令 | 是否 mock |
+|------|------|-----------|
+| 本地测试 / Admin 演示 | `bash tools/scripts/start.sh` | **是**（`db.sh seed`） |
+| 部署 / 生产 | `bash tools/scripts/start.sh --deploy` | **否**（仅 migrate） |
+
+**禁止**对生产库执行 `db.sh seed`。`admin.sh start` 本身不灌种，只启动进程。
+
 ### 目录与迁移
 
 | 现象 | 原因 | 解法 |

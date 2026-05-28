@@ -20,9 +20,15 @@
 - 对 DLQ 做人工补偿或回放
 
 ## 一键启动与分层脚本
-- 全栈一键启动：`bash tools/scripts/start_all.sh`
-- 仅启动后台：admin `bash tools/scripts/dev/start_backend.sh`，worker `bash tools/scripts/dev/start_worker.sh`
-- 快速状态检查：`bash tools/scripts/status.sh`
+
+| 场景 | 命令 |
+|------|------|
+| 测试 / 演示（**带 mock**） | `bash tools/scripts/start.sh` 或 `start_all.sh` |
+| 部署（**不带 mock**） | `bash tools/scripts/start.sh --deploy` 或 `start_all.sh --deploy` |
+| 仅启 admin | `bash tools/scripts/admin.sh start`（不 seed，需已 migrate） |
+| 仅启 worker | `bash tools/scripts/worker.sh start` |
+| 状态检查 | `bash tools/scripts/status.sh` |
+
 - 管理前端由 `admin/web/dist` 提供，入口 `http://127.0.0.1:8787/admin`
 - `?lang` / `?theme` 查询参数不再影响页面渲染，统一使用 SPA 入口 `/admin`
 - 入口不可达时优先执行：`bash tools/scripts/admin.sh stop && bash tools/scripts/services.sh up && bash tools/scripts/admin.sh start`

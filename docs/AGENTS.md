@@ -44,7 +44,8 @@ wechatbot/                    # Rust 主工程（仓库根 — 在此执行 carg
 | Test (E2E, 勿卡死) | `bash tools/scripts/test/run_e2e.sh` |
 | Run admin | `cargo run --bin admin` 或 `bash tools/scripts/admin.sh start` |
 | Run worker | `cargo run --bin worker` |
-| Start env | `bash tools/scripts/start.sh` |
+| Start env (dev, mock) | `bash tools/scripts/start.sh` |
+| Start env (deploy, no mock) | `bash tools/scripts/start.sh --deploy` |
 | Dev verify | `bash tools/scripts/dev.sh` |
 | Web admin UI | `cd admin/web && npm run build` |
 

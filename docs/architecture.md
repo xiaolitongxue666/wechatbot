@@ -12,15 +12,44 @@ The **Rust SDK** goes beyond a client library to provide a **multi-bot server in
 
 ## Technology Stack
 
+### Rust Main Engineering (repo root)
+
+| Layer | Technology |
+|---|---|
+| **Language** | Rust 2021 edition |
+| **Async runtime** | Tokio |
+| **HTTP server** | Axum 0.8, Tower, tower-http |
+| **Serialization** | serde / serde_json |
+| **Logging** | tracing |
+| **Config** | `config/app.toml` + `.env` (dotenvy) |
+| **Data access** | **SQLx** (raw SQL + Repository pattern — **not** Diesel/SeaORM) |
+| **Backend infra** | PostgreSQL 16, Redis 7, MinIO or localfs (Docker Compose in `deploy/`) |
+
+### Admin Web Frontend (`admin/web/`)
+
+| Layer | Technology |
+|---|---|
+| **Framework** | Vue 3 (Composition API, `<script setup>`) |
+| **Language** | TypeScript |
+| **Build** | Vite 7 |
+| **Package runner** | Bun |
+| **E2E** | Playwright |
+
+No Vue Router or Pinia — view mode is toggled in `App.vue`; REST calls use native `fetch` via `src/api.ts`.
+
+**Serving:** production builds to `admin/web/dist`, served by the `admin` binary at `/admin`. Dev: `bun run dev` on `:5174` with Vite proxy to `:8787` for `/admin/api`.
+
+### Reference SDKs (separate packages)
+
 | Layer | Technology |
 |---|---|
 | **Node.js SDK** | TypeScript 5.5+, Node.js >=22, Vitest, zero runtime deps |
 | **Python SDK** | Python >=3.9, aiohttp 3.9+, cryptography 42+, pytest, Hatchling |
 | **Go SDK** | Go 1.22, **pure stdlib** (no external dependencies) |
-| **Rust SDK** | Rust 2021 edition, Tokio (async), Reqwest (HTTP), Serde (JSON), aes (AES-128), Axum (web), SQLx (Postgres), Redis-rs |
-| **Rust Backend** | PostgreSQL 16, Redis 7, MinIO (S3-compatible storage), Docker Compose |
-| **Pi Agent** | TypeScript/Node.js, `@wechatbot/wechatbot` SDK, qrcode-terminal |
+| **Pi Agent** (legacy) | TypeScript/Node.js, `@wechatbot/wechatbot` SDK |
 | **CI/CD** | GitHub Actions |
+
+Rust-specific architecture (binaries, routes, modules): [`rust/architecture.md`](rust/architecture.md).
 
 ---
 
@@ -117,7 +146,34 @@ graph TD
 
 ## Rust Multi-Bot Server Architecture
 
-The Rust crate extends the client SDK with production-scale multi-bot infrastructure:
+The Rust crate at the **repository root** extends the client SDK with production-scale multi-bot infrastructure. Two binaries:
+
+| Binary | Entry | Role |
+|---|---|---|
+| **`admin`** | `src/bin/admin.rs` | Axum HTTP on `:8787` — REST API, Vue SPA (`admin/web/dist`), public QR register page; embeds `MultiBotRuntime` for start/stop |
+| **`worker`** | `src/bin/worker.rs` | Standalone `ForwarderWorker` consuming Redis event queue |
+
+```mermaid
+flowchart TB
+  subgraph fe ["admin/web"]
+    Vue["Vue 3 + TS + Vite"]
+  end
+  subgraph be ["Rust repo root"]
+    Admin["bin/admin :8787"]
+    Worker["bin/worker"]
+    RT["MultiBotRuntime"]
+  end
+  subgraph store ["Data"]
+    PG["PostgreSQL"]
+    RD["Redis"]
+  end
+  Vue -->|"/admin/api/*"| Admin
+  Admin --> RT
+  RT --> PG
+  RT --> RD
+  Worker --> RD
+  Worker --> PG
+```
 
 ```mermaid
 graph LR
@@ -133,6 +189,23 @@ graph LR
     J --> K["SessionManager"]
     K --> B
 ```
+
+### Admin HTTP Routes
+
+| Path | Purpose |
+|---|---|
+| `/admin` | Vue SPA shell + client routes |
+| `/admin/api/overview` | Dashboard metrics |
+| `/admin/api/bots` | List / create bots |
+| `/admin/api/bots/{id}` | Detail / delete |
+| `/admin/api/bots/{id}/start` \| `stop` \| `status` | Bot lifecycle |
+| `/admin/api/bots/{id}/forward-policy` | Forwarding policy |
+| `/admin/api/sessions/{id}/history` | Paginated message history |
+| `/admin/api/system-logs/*` | Admin / worker log tail |
+| `/bot/{bot_id}` | Public QR registration page |
+| `/healthz` | Health check |
+
+Auth: `Authorization: Bearer <token>` (hashed in `admin_users`).
 
 ### Rust-Exclusive Modules
 
@@ -163,13 +236,18 @@ Multi-level configuration system:
 
 ### Database Schema
 
+SQL migrations live in `migrations/*.sql`. Applied via `bash tools/scripts/db.sh migrate`.
+
 | Table | Purpose |
 |---|---|
-| `bot_sessions` | Bot registration, credentials, status, metadata |
-| `chat_messages` | Incoming and outgoing messages with full payload |
+| `bots` | Bot instances, status, heartbeat |
+| `bot_sessions` | User sessions (wx user ↔ bot) |
+| `chat_messages` | Incoming and outgoing messages with full payload (JSONB) |
 | `chat_media` | Media metadata: type, size, storage path, AES keys |
 | `forward_events` | Outbound event queue for webhook delivery tracking |
 | `forward_dlq` | Dead letter queue for permanently failed forwards |
+| `admin_users` / `admin_user_bot_scopes` | Admin RBAC |
+| `bot_forward_policies` | Per-bot forwarding enable + target allowlist |
 
 ---
 

@@ -377,109 +377,205 @@ impl DlqEntryBuilder {
 pub async fn seed_medium_dataset(pool: &PgPool) {
     let mut fixtures = TestFixtures::new(pool);
 
-    let b1 = TestFixtures::bot("bot-001")
-        .status("online")
-        .heartbeat_ago_seconds(30)
-        .finish();
-    let b2 = TestFixtures::bot("bot-002")
-        .status("online")
-        .heartbeat_ago_seconds(60)
-        .finish();
-    let b3 = TestFixtures::bot("bot-003")
-        .status("offline")
-        .finish();
-    let b4 = TestFixtures::bot("bot-004")
-        .status("online")
-        .heartbeat_now()
-        .finish();
-    let b5 = TestFixtures::bot("bot-005")
-        .status("expired")
-        .heartbeat_ago_seconds(400)
-        .finish();
+    // 六种典型状态，便于管理台演示
+    fixtures.add_bot(
+        TestFixtures::bot("bot-001")
+            .status("online")
+            .heartbeat_ago_seconds(20)
+            .finish(),
+    );
+    fixtures.add_bot(
+        TestFixtures::bot("bot-002")
+            .status("online")
+            .heartbeat_ago_seconds(40)
+            .finish(),
+    );
+    fixtures.add_bot(TestFixtures::bot("bot-003").status("offline").finish());
+    fixtures.add_bot(TestFixtures::bot("bot-004").status("pending_qr").finish());
+    fixtures.add_bot(
+        TestFixtures::bot("bot-005")
+            .status("expired")
+            .heartbeat_ago_seconds(7_200)
+            .finish(),
+    );
+    fixtures.add_bot(
+        TestFixtures::bot("bot-006")
+            .status("online")
+            .heartbeat_ago_seconds(4_000)
+            .finish(),
+    );
 
-    fixtures.add_bot(b1);
-    fixtures.add_bot(b2);
-    fixtures.add_bot(b3);
-    fixtures.add_bot(b4);
-    fixtures.add_bot(b5);
+    fixtures.add_bot_session(TestFixtures::bot_session("sess-001", "bot-001", "wx_alice").finish());
+    fixtures.add_bot_session(TestFixtures::bot_session("sess-002", "bot-001", "wx_bob").finish());
+    fixtures.add_bot_session(
+        TestFixtures::bot_session("sess-003", "bot-002", "wx_charlie").finish(),
+    );
+    fixtures.add_bot_session(TestFixtures::bot_session("sess-004", "bot-003", "wx_dave").finish());
+    fixtures.add_bot_session(TestFixtures::bot_session("sess-005", "bot-005", "wx_eve").finish());
+    fixtures.add_bot_session(
+        TestFixtures::bot_session("sess-006", "bot-006", "wx_frank").finish(),
+    );
 
-    let s1 = TestFixtures::bot_session("sess-001", "bot-001", "wx_alice").finish();
-    let s2 = TestFixtures::bot_session("sess-002", "bot-001", "wx_bob").finish();
-    let s3 = TestFixtures::bot_session("sess-003", "bot-002", "wx_charlie").finish();
-    let s4 = TestFixtures::bot_session("sess-004", "bot-003", "wx_dave").finish();
-    let s5 = TestFixtures::bot_session("sess-005", "bot-004", "wx_eve").finish();
+    let mut add_msg = |session_id: &str, from: &str, to: &str, content: &str, ct: &str, mins_ago: i64| {
+        fixtures.add_message(
+            TestFixtures::chat_message(session_id, from)
+                .to_user(to)
+                .text(content)
+                .content_type(ct)
+                .received_at_minutes_ago(mins_ago)
+                .finish(),
+        );
+    };
 
-    fixtures.add_bot_session(s1);
-    fixtures.add_bot_session(s2);
-    fixtures.add_bot_session(s3);
-    fixtures.add_bot_session(s4);
-    fixtures.add_bot_session(s5);
-
-    let session_ids = ["sess-001", "sess-002", "sess-003", "sess-004", "sess-005"];
-    let users = ["user_alice", "user_bob", "user_charlie", "user_dave", "user_eve"];
-    let contents = [
-        ("hello world", "text"),
-        ("How are you?", "text"),
-        ("Check this image", "image"),
-        ("Voice message", "voice"),
-        ("Video call later?", "video"),
-        ("OK", "text"),
-    ];
-
-    for i in 0..30 {
-        let session_id = session_ids[i % session_ids.len()];
-        let user = users[i % users.len()];
-        let (content, ct) = contents[i % contents.len()];
-        let m = TestFixtures::chat_message(session_id, user)
-            .text(content)
-            .content_type(ct)
-            .received_at_minutes_ago((30 - i as i64).max(1))
-            .finish();
-        fixtures.add_message(m);
+    // bot-001：双会话文本对话（各 6 条 → messages_today = 12）
+    for (i, (from, to, text)) in [
+        ("wx_alice", "bot-001", "你好"),
+        ("bot-001", "wx_alice", "在的，请说"),
+        ("wx_alice", "bot-001", "帮我查订单"),
+        ("bot-001", "wx_alice", "请提供订单号"),
+        ("wx_alice", "bot-001", "ORD-10086"),
+        ("bot-001", "wx_alice", "订单已发货"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        add_msg("sess-001", from, to, text, "text", 30 - i as i64);
+    }
+    for (i, (from, to, text)) in [
+        ("wx_bob", "bot-001", "下午开会吗？"),
+        ("bot-001", "wx_bob", "三点产品评审"),
+        ("wx_bob", "bot-001", "收到"),
+        ("bot-001", "wx_bob", "已同步日历"),
+        ("wx_bob", "bot-001", "谢谢"),
+        ("bot-001", "wx_bob", "不客气"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        add_msg("sess-002", from, to, text, "text", 28 - i as i64);
     }
 
-    let fe1 = TestFixtures::forward_event("evt-dlq-001", "sess-001")
-        .status("failed")
-        .retry_count(5)
-        .error("connection timeout")
-        .finish();
-    let fe2 = TestFixtures::forward_event("evt-success-001", "sess-001")
-        .status("success")
-        .retry_count(1)
-        .finish();
-    let fe3 = TestFixtures::forward_event("evt-retrying-001", "sess-002")
-        .status("retrying")
-        .retry_count(2)
-        .error("500 internal server error")
-        .finish();
-    let fe4 = TestFixtures::forward_event("evt-blocked-001", "sess-005")
-        .status("blocked")
-        .retry_count(1)
-        .error("target blocked by policy")
-        .updated_at_minutes_ago(2)
-        .finish();
-    let fe5 = TestFixtures::forward_event("evt-failed-yesterday-001", "sess-003")
-        .status("failed")
-        .retry_count(1)
-        .error("yesterday failure")
-        .updated_at_hours_ago(30)
-        .finish();
+    // bot-002：多媒体会话
+    add_msg("sess-003", "wx_charlie", "bot-002", "这是现场照片", "text", 25);
+    add_msg(
+        "sess-003",
+        "wx_charlie",
+        "bot-002",
+        "[image] https://example.com/photo.jpg",
+        "image",
+        24,
+    );
+    add_msg(
+        "sess-003",
+        "wx_charlie",
+        "bot-002",
+        "[voice] 语音 12s",
+        "voice",
+        23,
+    );
+    add_msg(
+        "sess-003",
+        "bot-002",
+        "wx_charlie",
+        "收到，稍后回复",
+        "text",
+        22,
+    );
+    add_msg(
+        "sess-003",
+        "wx_charlie",
+        "bot-002",
+        "[video] 会议录屏",
+        "video",
+        21,
+    );
+    add_msg(
+        "sess-003",
+        "bot-002",
+        "wx_charlie",
+        "已转存",
+        "text",
+        20,
+    );
 
-    fixtures.add_forward_event(fe1);
-    fixtures.add_forward_event(fe2);
-    fixtures.add_forward_event(fe3);
-    fixtures.add_forward_event(fe4);
-    fixtures.add_forward_event(fe5);
+    // bot-003：离线 bot 的历史会话
+    add_msg("sess-004", "wx_dave", "bot-003", "今天天气怎么样", "text", 18);
+    add_msg("sess-004", "bot-003", "wx_dave", "今天晴，18~26℃", "text", 17);
+    add_msg("sess-004", "wx_dave", "bot-003", "需要带伞吗", "text", 16);
+    add_msg("sess-004", "bot-003", "wx_dave", "傍晚有小雨", "text", 15);
 
-    let dlq1 = TestFixtures::dlq_entry("evt-dlq-permanent-001", "sess-001")
-        .error("permanent failure after 5 retries")
-        .finish();
-    let dlq2 = TestFixtures::dlq_entry("evt-dlq-permanent-002", "sess-002")
-        .error("webhook unreachable")
-        .finish();
+    // bot-005：已过期 + Coze 转发链路
+    add_msg("sess-005", "wx_eve", "bot-005", "给我列出明天的安排", "text", 12);
+    add_msg("sess-005", "bot-005", "coze", "发送请求", "text", 11);
+    add_msg(
+        "sess-005",
+        "coze",
+        "bot-005",
+        "明后天的安排是：会议、复盘、发布",
+        "text",
+        10,
+    );
+    add_msg(
+        "sess-005",
+        "bot-005",
+        "wx_eve",
+        "明后天的安排是：会议、复盘、发布",
+        "text",
+        9,
+    );
 
-    fixtures.add_dlq_entry(dlq1);
-    fixtures.add_dlq_entry(dlq2);
+    // bot-006：心跳超时（DB 仍 online，API 展示离线）
+    add_msg("sess-006", "wx_frank", "bot-006", "还在吗？", "text", 8);
+    add_msg("sess-006", "bot-006", "wx_frank", "刚才断线了", "text", 7);
+    add_msg("sess-006", "wx_frank", "bot-006", "好的", "text", 6);
+
+    fixtures.add_forward_event(
+        TestFixtures::forward_event("evt-dlq-001", "sess-001")
+            .status("failed")
+            .retry_count(5)
+            .error("connection timeout")
+            .finish(),
+    );
+    fixtures.add_forward_event(
+        TestFixtures::forward_event("evt-success-001", "sess-001")
+            .status("success")
+            .retry_count(1)
+            .finish(),
+    );
+    fixtures.add_forward_event(
+        TestFixtures::forward_event("evt-retrying-001", "sess-002")
+            .status("retrying")
+            .retry_count(2)
+            .error("500 internal server error")
+            .finish(),
+    );
+    fixtures.add_forward_event(
+        TestFixtures::forward_event("evt-blocked-001", "sess-005")
+            .status("blocked")
+            .retry_count(1)
+            .error("target blocked by policy")
+            .updated_at_minutes_ago(2)
+            .finish(),
+    );
+    fixtures.add_forward_event(
+        TestFixtures::forward_event("evt-failed-yesterday-001", "sess-003")
+            .status("failed")
+            .retry_count(1)
+            .error("yesterday failure")
+            .updated_at_hours_ago(30)
+            .finish(),
+    );
+
+    fixtures.add_dlq_entry(
+        TestFixtures::dlq_entry("evt-dlq-permanent-001", "sess-001")
+            .error("permanent failure after 5 retries")
+            .finish(),
+    );
+    fixtures.add_dlq_entry(
+        TestFixtures::dlq_entry("evt-dlq-permanent-002", "sess-002")
+            .error("webhook unreachable")
+            .finish(),
+    );
 
     fixtures.apply().await;
     seed_admin_rbac(pool).await;
@@ -534,9 +630,12 @@ pub async fn seed_admin_rbac(pool: &PgPool) {
         r#"
         INSERT INTO bot_forward_policies (bot_id, forwarding_enabled, allowed_targets, updated_at)
         VALUES
-            ('bot-001', TRUE, ARRAY['webhook']::TEXT[], NOW()),
+            ('bot-001', TRUE,  ARRAY['webhook']::TEXT[], NOW()),
             ('bot-002', FALSE, ARRAY['webhook']::TEXT[], NOW()),
-            ('bot-003', TRUE, ARRAY['coze']::TEXT[], NOW())
+            ('bot-003', TRUE,  ARRAY['coze']::TEXT[], NOW()),
+            ('bot-004', TRUE,  ARRAY['webhook']::TEXT[], NOW()),
+            ('bot-005', TRUE,  ARRAY['coze']::TEXT[], NOW()),
+            ('bot-006', TRUE,  ARRAY['webhook']::TEXT[], NOW())
         ON CONFLICT (bot_id) DO UPDATE
         SET forwarding_enabled = EXCLUDED.forwarding_enabled,
             allowed_targets = EXCLUDED.allowed_targets,

@@ -12,24 +12,41 @@
 
 ## 2. 本地搭建流程
 
-在仓库根目录执行：
+在仓库根目录执行。
+
+### 2.1 测试 / 演示（带 mock 数据，默认）
 
 ```bash
-# 一键启动依赖、迁移、可选种子、后台服务
 bash tools/scripts/start.sh
+# 全栈 admin + worker：
+bash tools/scripts/start_all.sh
+```
 
-# 仅启动协议回环验证示例
+### 2.2 部署（不带 mock 数据）
+
+```bash
+bash tools/scripts/start.sh --deploy
+# 或手动：services.sh up → db.sh migrate（勿 seed）→ admin.sh start
+```
+
+### 2.3 其他
+
+```bash
+# 仅协议回环验证
 bash tools/scripts/dev.sh
+
+# 不启动 admin，仅准备环境（仍按 --dev/--deploy 决定是否 seed）
+bash tools/scripts/start.sh --deploy --no-admin
 ```
 
 常用参数：
 
 ```bash
-# 仅建表，不灌种
-bash tools/scripts/start.sh --no-seed
+# 显式 dev（与默认相同）
+bash tools/scripts/start.sh --dev
 
-# 不启动 admin，仅完成环境准备
-bash tools/scripts/start.sh --no-admin
+# deploy 别名
+bash tools/scripts/start.sh --no-seed
 ```
 
 ## 3. 测试流程

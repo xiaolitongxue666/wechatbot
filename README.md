@@ -10,7 +10,10 @@
 
 ```bash
 cp .env.example .env
+# 测试/演示（带 mock）
 bash tools/scripts/start.sh
+# 部署（不带 mock）
+bash tools/scripts/start.sh --deploy
 ```
 
 管理界面：http://127.0.0.1:8787/admin

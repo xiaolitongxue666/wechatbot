@@ -32,10 +32,28 @@ wechatbot/                 # Rust 主工程（在此 cargo build）
 ```bash
 # 仓库根目录
 cp .env.example .env    # 首次
-bash tools/scripts/start.sh   # PG/Redis/MinIO → 迁移 → 种子 → admin
+
+# 测试/演示（带 mock bot 与会话数据）
+bash tools/scripts/start.sh
+
+# 部署（仅 migrate，不灌 mock）
+bash tools/scripts/start.sh --deploy
 ```
 
 管理界面：**http://127.0.0.1:8787/admin**
+
+## 技术栈
+
+| 层级 | 选型 | 说明 |
+|------|------|------|
+| 后端 | Rust + Tokio + Axum | 二进制 `admin` / `worker`，见 [`rust/architecture.md`](rust/architecture.md) |
+| 数据访问 | **SQLx**（非 ORM） | 手写 SQL + Repository；迁移 `migrations/*.sql` |
+| 数据库 | PostgreSQL 16 | Bot、会话、消息、RBAC |
+| 缓存/队列 | Redis 7 | 事件队列、会话在线状态 |
+| 媒体 | localfs / MinIO | 可选 S3 兼容存储 |
+| 前端 | Vue 3 + TS + Vite + Bun | 目录 `admin/web/`，E2E 用 Playwright |
+
+全仓多语言对照：[architecture.md](architecture.md)
 
 ```bash
 bash tools/scripts/admin.sh start   # 仅启动 admin（依赖已运行时）
@@ -82,6 +100,7 @@ cd admin/web && npm run dev   # http://127.0.0.1:5174/admin/
 | [rust/agent-memory.md](rust/agent-memory.md) | Agent 记忆、**问题与解法总表** |
 | [protocol.md](protocol.md) | iLink 协议 |
 | [architecture.md](architecture.md) | 全仓架构 |
+| [rust/architecture.md](rust/architecture.md) | **Rust 前后端技术栈与模块** |
 | [AGENTS.md](AGENTS.md) | 开发约定（含 Agent） |
 | [../reference-sdks/README.md](../reference-sdks/README.md) | 参考 SDK 索引 |
 | [../legacy/README.md](../legacy/README.md) | 归档子项目 |
