@@ -136,13 +136,14 @@ test("web admin shell renders", async ({ page }) => {
   await page.goto("/admin/");
   await expect(page.getByRole("heading", { name: /WeChatBot (Web Admin|管理后台)/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Overview|概览/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Logs Panel|日志面板/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /System Logs|系统日志/ })).toBeVisible();
   await expect(page.getByText(/(Total Messages Today|今日消息总数)/)).toBeVisible();
   await expect(page.getByText(/(Total Forward Failures Today|今日转发失败总数)/)).toBeVisible();
   await expect(page.getByText(/(Messages Today|今日消息数)/)).toBeVisible();
   await expect(page.getByText(/(Forward Failures|转发失败数)/)).toBeVisible();
+  await expect(page.getByText(/admin log line/)).toBeVisible();
   await page.getByRole("button", { name: /Select|选择/ }).click();
   await expect(page.getByRole("heading", { name: /Selected Bot|当前 Bot/ })).toBeVisible();
-  await expect(page.getByText(/admin log line/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Messages & Forwarding|消息与转发/ })).toBeVisible();
   await expect(page.getByText(/worker log line/)).toBeVisible();
 });

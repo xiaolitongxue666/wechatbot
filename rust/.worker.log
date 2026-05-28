@@ -1,1 +1,5 @@
-2026-05-19T15:16:39.825815Z  INFO wechatbot::infra::logging: tracing initialized service="forwarder_worker"
+2026-05-28T10:00:00.100000Z INFO wechatbot::infra::logging: tracing initialized service="forwarder_worker"
+2026-05-28T10:00:01.200000Z INFO wechatbot::forwarder: forward event consumed event_id=evt-s5-002 session_id=sess-005 bot_id=bot-004
+2026-05-28T10:00:01.800000Z INFO wechatbot::forwarder: forward endpoint returned 200 bot_id=bot-004 session_id=sess-005
+2026-05-28T10:00:02.300000Z INFO wechatbot::forwarder: forward event consumed event_id=evt-s6-002 session_id=sess-006 bot_id=bot-005
+2026-05-28T10:00:02.900000Z INFO wechatbot::forwarder: forward endpoint returned 200 bot_id=bot-005 session_id=sess-006

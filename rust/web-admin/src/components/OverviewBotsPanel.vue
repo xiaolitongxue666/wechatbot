@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatBotStatus } from "../botPresentation";
 import type { BotListItem, Overview } from "../types";
 import type { UiLanguage } from "../ui";
 import { translate } from "../ui";
@@ -53,7 +54,7 @@ function text(key: Parameters<typeof translate>[1]): string {
           <tbody>
             <tr v-for="botRow in bots" :key="botRow.bot_id" :class="{ selected: selectedBotId === botRow.bot_id }">
               <td>{{ botRow.bot_id }}</td>
-              <td>{{ botRow.status }}</td>
+              <td>{{ formatBotStatus(currentLanguage, botRow.status) }}</td>
               <td>{{ botRow.last_heartbeat_display || text("notAvailable") }}</td>
               <td>{{ botRow.messages_today }}</td>
               <td>{{ botRow.forward_failures_today }}</td>

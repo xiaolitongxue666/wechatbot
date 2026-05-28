@@ -1,37 +1,50 @@
 <script setup lang="ts">
-import type { SessionHistory, SystemLogPayload } from "../types";
+import { nextTick, ref, watch } from "vue";
+import type { SystemLogPayload } from "../types";
 import type { UiLanguage } from "../ui";
 import { translate } from "../ui";
 
+const scrollContainer = ref<HTMLElement | null>(null);
+
 const props = defineProps<{
   currentLanguage: UiLanguage;
-  sessionHistory: SessionHistory | null;
-  historyPage: number;
-  isHistoryLoading: boolean;
-  historyError: string;
-  systemAdminLog: SystemLogPayload | null;
-  systemWorkerLog: SystemLogPayload | null;
+  systemLog: SystemLogPayload | null;
   isSystemLogLoading: boolean;
   systemLogError: string;
   systemLogUpdatedAt: string;
 }>();
 
 const emit = defineEmits<{
-  (event: "history-prev"): void;
-  (event: "history-next"): void;
   (event: "refresh-system-logs"): void;
 }>();
 
 function text(key: Parameters<typeof translate>[1]): string {
   return translate(props.currentLanguage, key);
 }
+
+watch(
+  () => props.systemLog?.lines.length ?? 0,
+  async () => {
+    const element = scrollContainer.value;
+    if (!element) {
+      return;
+    }
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    const stickToBottom = distanceFromBottom < 48;
+    await nextTick();
+    if (stickToBottom) {
+      element.scrollTop = element.scrollHeight;
+    }
+  },
+);
 </script>
 
 <template>
   <section class="bottom-bar card">
     <div class="panel-header top-header">
-      <h2>{{ text("logsPanel") }}</h2>
+      <h2>{{ text("systemLogs") }}</h2>
       <div class="header-actions">
+        <span class="auto-refresh-badge">{{ text("autoRefreshLogs") }}</span>
         <span class="muted">{{ systemLogUpdatedAt }}</span>
         <button class="button secondary" type="button" @click="emit('refresh-system-logs')">
           {{ text("refreshLogs") }}
@@ -39,69 +52,14 @@ function text(key: Parameters<typeof translate>[1]): string {
       </div>
     </div>
 
-    <div class="logs-grid">
-      <article class="log-panel">
-        <div class="panel-header">
-          <h3>{{ text("sessionLogs") }}</h3>
-          <div class="pager-actions">
-            <button
-              class="button secondary"
-              type="button"
-              :disabled="!sessionHistory || historyPage <= 1 || isHistoryLoading"
-              @click="emit('history-prev')"
-            >
-              {{ text("prev") }}
-            </button>
-            <button
-              class="button secondary"
-              type="button"
-              :disabled="
-                !sessionHistory ||
-                historyPage >= sessionHistory.total_pages ||
-                isHistoryLoading
-              "
-              @click="emit('history-next')"
-            >
-              {{ text("next") }}
-            </button>
-          </div>
-        </div>
+    <p class="muted system-log-hint">{{ text("systemLogsHint") }}</p>
 
-        <div v-if="historyError" class="error-text">{{ historyError }}</div>
-        <div v-if="isHistoryLoading" class="muted">{{ text("loading") }}</div>
+    <div v-if="systemLogError" class="error-text">{{ systemLogError }}</div>
+    <div v-if="isSystemLogLoading" class="loading-overlay">{{ text("loading") }}</div>
 
-        <div v-if="sessionHistory" class="scroll-area">
-          <div v-for="row in sessionHistory.rows" :key="`${row.received_at}-${row.from_user_id}-${row.to_user_id}`" class="log-line">
-            [{{ row.received_at }}] [{{ row.direction }}] {{ row.from_user_id }} -> {{ row.to_user_id }}: {{ row.text_content }}
-          </div>
-        </div>
-        <div v-else class="muted">{{ text("noLogData") }}</div>
-      </article>
-
-      <article class="log-panel">
-        <div class="panel-header">
-          <h3>{{ text("systemLogs") }}</h3>
-          <span class="muted">{{ text("adminLogs") }} / {{ text("workerLogs") }}</span>
-        </div>
-        <div v-if="systemLogError" class="error-text">{{ systemLogError }}</div>
-        <div v-if="isSystemLogLoading" class="muted">{{ text("loading") }}</div>
-        <div class="system-logs">
-          <section class="sub-panel">
-            <h4>{{ text("adminLogs") }}</h4>
-            <div class="scroll-area">
-              <div v-for="line in systemAdminLog?.lines ?? []" :key="line" class="log-line">{{ line }}</div>
-              <div v-if="!systemAdminLog || systemAdminLog.lines.length === 0" class="muted">{{ text("noLogData") }}</div>
-            </div>
-          </section>
-          <section class="sub-panel">
-            <h4>{{ text("workerLogs") }}</h4>
-            <div class="scroll-area">
-              <div v-for="line in systemWorkerLog?.lines ?? []" :key="line" class="log-line">{{ line }}</div>
-              <div v-if="!systemWorkerLog || systemWorkerLog.lines.length === 0" class="muted">{{ text("noLogData") }}</div>
-            </div>
-          </section>
-        </div>
-      </article>
+    <div ref="scrollContainer" class="scroll-area">
+      <div v-for="(line, index) in systemLog?.lines ?? []" :key="index" class="log-line">{{ line }}</div>
+      <div v-if="!systemLog || systemLog.lines.length === 0" class="muted">{{ text("noLogData") }}</div>
     </div>
   </section>
 </template>
@@ -112,7 +70,7 @@ function text(key: Parameters<typeof translate>[1]): string {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -136,64 +94,46 @@ function text(key: Parameters<typeof translate>[1]): string {
   white-space: nowrap;
 }
 
+.auto-refresh-badge {
+  font-size: 12px;
+  color: var(--muted-text);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
 .top-header .header-actions {
   margin-left: auto;
 }
 
-.pager-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.logs-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
-  align-items: stretch;
-}
-
-.log-panel {
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 10px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.sub-panel {
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 8px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.system-logs {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
+.system-log-hint {
+  margin: 0;
+  font-size: 13px;
 }
 
 .scroll-area {
+  position: relative;
   min-height: 0;
+  flex: 1;
   overflow: auto;
   border: 1px solid var(--table-border);
   border-radius: 6px;
   padding: 6px;
   background: var(--cell-bg);
-  flex: 1;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+  font-size: 12px;
+  color: var(--muted-text);
+  background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  pointer-events: none;
 }
 
 .log-line {
@@ -207,24 +147,10 @@ function text(key: Parameters<typeof translate>[1]): string {
 
 .error-text {
   color: var(--error-text);
-  margin-bottom: 6px;
 }
 
-@media (max-width: 1100px) {
-  .logs-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .system-logs {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-h2,
-h3,
-h4 {
-  margin-top: 0;
-  margin-bottom: 0;
+h2 {
+  margin: 0;
 }
 
 @media (max-width: 860px) {

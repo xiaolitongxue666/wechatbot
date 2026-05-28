@@ -52,63 +52,81 @@ cmd_seed() {
 
     cat <<'SQL' | psql_exec_file "$DB_URL" /dev/stdin
 
--- 5 个 bots
+-- 6 个 bots（多数在线，便于管理台演示）
 INSERT INTO bots (bot_id, bot_name, status, last_heartbeat_at, created_at, updated_at)
 VALUES
-  ('bot-001', 'demo-1', 'online',  NOW() - INTERVAL '30 seconds',  NOW(), NOW()),
-  ('bot-002', 'demo-2', 'online',  NOW() - INTERVAL '60 seconds',  NOW(), NOW()),
-  ('bot-003', 'demo-3', 'offline', NULL,                            NOW(), NOW()),
-  ('bot-004', 'demo-4', 'online',  NOW(),                           NOW(), NOW()),
-  ('bot-005', 'demo-5', 'expired', NOW() - INTERVAL '400 seconds', NOW(), NOW())
+  ('bot-001', 'demo-1', 'online',  NOW() - INTERVAL '20 seconds',  NOW(), NOW()),
+  ('bot-002', 'demo-2', 'online',  NOW() - INTERVAL '40 seconds',  NOW(), NOW()),
+  ('bot-003', 'demo-3', 'online',  NOW() - INTERVAL '15 seconds',  NOW(), NOW()),
+  ('bot-004', 'demo-4', 'online',  NOW() - INTERVAL '10 seconds',  NOW(), NOW()),
+  ('bot-005', 'demo-5', 'online',  NOW() - INTERVAL '25 seconds',  NOW(), NOW()),
+  ('bot-006', 'demo-6', 'offline', NULL,                            NOW(), NOW())
 ON CONFLICT (bot_id) DO UPDATE SET
+  bot_name = EXCLUDED.bot_name,
   status = EXCLUDED.status,
   last_heartbeat_at = EXCLUDED.last_heartbeat_at,
   updated_at = NOW();
 
--- 5 个 bot_sessions（bot-001 有两个会话，便于展示 bot 级聚合差异）
+-- bot_sessions（bot-001 双会话；bot-003/005 各 1 会话）
 INSERT INTO bot_sessions (session_id, bot_id, user_id, status, created_at, updated_at)
 VALUES
   ('sess-001', 'bot-001', 'wx_alice',   'active', NOW(), NOW()),
   ('sess-002', 'bot-001', 'wx_bob',     'active', NOW(), NOW()),
   ('sess-003', 'bot-002', 'wx_charlie', 'active', NOW(), NOW()),
   ('sess-004', 'bot-003', 'wx_dave',    'active', NOW(), NOW()),
-  ('sess-005', 'bot-004', 'wx_eve',     'active', NOW(), NOW())
+  ('sess-005', 'bot-004', 'wx_eve',     'active', NOW(), NOW()),
+  ('sess-006', 'bot-005', 'wx_frank',   'active', NOW(), NOW())
 ON CONFLICT (session_id) DO UPDATE SET
   bot_id = EXCLUDED.bot_id,
   user_id = EXCLUDED.user_id,
   status = EXCLUDED.status,
   updated_at = NOW();
 
--- 30 条 chat_messages，平均分配到 5 个 session
+-- 演示：消息与转发完整链路（sess-005 / bot-004 / coze）
+DELETE FROM chat_messages WHERE session_id IN ('sess-004', 'sess-005', 'sess-006');
+
+INSERT INTO chat_messages (
+  message_id, event_id, session_id, from_user_id, to_user_id, content_type, text_content, raw_payload_json, received_at
+) VALUES
+  ('msg-s5-001', 'evt-s5-001', 'sess-005', 'wx_eve',   'bot-004', 'text', '给我列出明天的安排', '{}'::jsonb, NOW() - INTERVAL '3 minutes'),
+  ('msg-s5-002', 'evt-s5-002', 'sess-005', 'bot-004',  'coze',    'text', '发送请求',         '{}'::jsonb, NOW() - INTERVAL '2 minutes 50 seconds'),
+  ('msg-s5-003', 'evt-s5-003', 'sess-005', 'coze',     'bot-004', 'text', '明后天的安排是：会议、复盘、发布', '{}'::jsonb, NOW() - INTERVAL '2 minutes 40 seconds'),
+  ('msg-s5-004', 'evt-s5-004', 'sess-005', 'bot-004',  'wx_eve',  'text', '明后天的安排是：会议、复盘、发布', '{}'::jsonb, NOW() - INTERVAL '2 minutes 30 seconds'),
+  ('msg-s4-001', 'evt-s4-001', 'sess-004', 'wx_dave',  'bot-003', 'text', '今天天气怎么样', '{}'::jsonb, NOW() - INTERVAL '8 minutes'),
+  ('msg-s4-002', 'evt-s4-002', 'sess-004', 'bot-003',  'wx_dave', 'text', '今天晴，18~26℃', '{}'::jsonb, NOW() - INTERVAL '7 minutes 40 seconds'),
+  ('msg-s6-001', 'evt-s6-001', 'sess-006', 'wx_frank', 'bot-005', 'text', '帮我总结这份文档', '{}'::jsonb, NOW() - INTERVAL '5 minutes'),
+  ('msg-s6-002', 'evt-s6-002', 'sess-006', 'bot-005',  'coze',    'text', '发送请求',       '{}'::jsonb, NOW() - INTERVAL '4 minutes 50 seconds'),
+  ('msg-s6-003', 'evt-s6-003', 'sess-006', 'coze',     'bot-005', 'text', '文档要点：目标、风险、排期', '{}'::jsonb, NOW() - INTERVAL '4 minutes 40 seconds'),
+  ('msg-s6-004', 'evt-s6-004', 'sess-006', 'bot-005',  'wx_frank','text', '文档要点：目标、风险、排期', '{}'::jsonb, NOW() - INTERVAL '4 minutes 30 seconds')
+ON CONFLICT (message_id) DO UPDATE SET
+  session_id = EXCLUDED.session_id,
+  from_user_id = EXCLUDED.from_user_id,
+  to_user_id = EXCLUDED.to_user_id,
+  text_content = EXCLUDED.text_content,
+  received_at = EXCLUDED.received_at;
+
+-- 其他会话保留通用样例消息
 INSERT INTO chat_messages (message_id, event_id, session_id, from_user_id, to_user_id, content_type, text_content, raw_payload_json, received_at)
 SELECT
-  'msg-' || lpad(i::text, 3, '0'),
-  'evt-' || lpad(i::text, 3, '0'),
-  'sess-' || lpad(((i - 1) % 5 + 1)::text, 3, '0'),
-  CASE (i % 6)
-    WHEN 0 THEN 'user_alice'
-    WHEN 1 THEN 'user_bob'
-    WHEN 2 THEN 'user_charlie'
-    WHEN 3 THEN 'user_dave'
-    WHEN 4 THEN 'user_eve'
-    WHEN 5 THEN 'user_frank'
+  'msg-gen-' || lpad(i::text, 3, '0'),
+  'evt-gen-' || lpad(i::text, 3, '0'),
+  CASE ((i - 1) % 3)
+    WHEN 0 THEN 'sess-001'
+    WHEN 1 THEN 'sess-002'
+    ELSE 'sess-003'
   END,
-  'bot-user',
-  CASE (i % 6)
-    WHEN 0 THEN 'text'  WHEN 1 THEN 'text'  WHEN 2 THEN 'image'
-    WHEN 3 THEN 'voice' WHEN 4 THEN 'video' WHEN 5 THEN 'text'
-  END,
-  CASE (i % 6)
-    WHEN 0 THEN 'hello world'
-    WHEN 1 THEN 'How are you?'
-    WHEN 2 THEN 'Check this image'
-    WHEN 3 THEN 'Voice message'
-    WHEN 4 THEN 'Video call later?'
-    WHEN 5 THEN 'OK'
+  CASE (i % 2) WHEN 0 THEN 'wx_alice' ELSE 'bot-001' END,
+  CASE (i % 2) WHEN 0 THEN 'bot-001' ELSE 'wx_alice' END,
+  'text',
+  CASE (i % 4)
+    WHEN 0 THEN '你好'
+    WHEN 1 THEN '在的，请说'
+    WHEN 2 THEN '收到'
+    ELSE '好的'
   END,
   '{}'::jsonb,
-  NOW() - (i * INTERVAL '1 minute')
-FROM generate_series(1, 30) AS s(i)
+  NOW() - (i * INTERVAL '90 seconds')
+FROM generate_series(1, 12) AS s(i)
 ON CONFLICT (message_id) DO NOTHING;
 
 -- 5 条 forward_events（其中 1 条为昨日失败，用于校验“今日失败”过滤）
@@ -149,13 +167,23 @@ INSERT INTO bot_forward_policies (bot_id, forwarding_enabled, allowed_targets, u
 VALUES
   ('bot-001', TRUE,  ARRAY['webhook']::TEXT[], NOW()),
   ('bot-002', FALSE, ARRAY['webhook']::TEXT[], NOW()),
-  ('bot-003', TRUE,  ARRAY['coze']::TEXT[], NOW())
+  ('bot-003', TRUE,  ARRAY['coze']::TEXT[], NOW()),
+  ('bot-004', TRUE,  ARRAY['coze']::TEXT[], NOW()),
+  ('bot-005', TRUE,  ARRAY['coze']::TEXT[], NOW())
 ON CONFLICT (bot_id) DO UPDATE SET
   forwarding_enabled = EXCLUDED.forwarding_enabled,
   allowed_targets = EXCLUDED.allowed_targets,
   updated_at = NOW();
 
 SQL
+
+    cat > "${RUST_DIR}/.worker.log" <<'EOF'
+2026-05-28T10:00:00.100000Z INFO wechatbot::infra::logging: tracing initialized service="forwarder_worker"
+2026-05-28T10:00:01.200000Z INFO wechatbot::forwarder: forward event consumed event_id=evt-s5-002 session_id=sess-005 bot_id=bot-004
+2026-05-28T10:00:01.800000Z INFO wechatbot::forwarder: forward endpoint returned 200 bot_id=bot-004 session_id=sess-005
+2026-05-28T10:00:02.300000Z INFO wechatbot::forwarder: forward event consumed event_id=evt-s6-002 session_id=sess-006 bot_id=bot-005
+2026-05-28T10:00:02.900000Z INFO wechatbot::forwarder: forward endpoint returned 200 bot_id=bot-005 session_id=sess-006
+EOF
 
     log_ok "Seed data inserted (bots/messages/forwards/admin users/policies)"
 }

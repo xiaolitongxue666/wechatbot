@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { filterWorkerLogLines } from "./logFilter";
+import { assignIfChanged, jsonEquals, linesEquals } from "./silentRefresh";
 import {
   createBot,
   deleteBot,
@@ -47,14 +49,39 @@ const pageSize = 30;
 const isHistoryLoading = ref(false);
 const historyError = ref("");
 
-const systemAdminLog = ref<SystemLogPayload | null>(null);
-const systemWorkerLog = ref<SystemLogPayload | null>(null);
+const systemLog = ref<SystemLogPayload | null>(null);
 const isSystemLogLoading = ref(false);
 const systemLogError = ref("");
 const systemLogUpdatedAt = ref("");
 
+const botWorkerLog = ref<SystemLogPayload | null>(null);
+const isWorkerLogLoading = ref(false);
+const workerLogError = ref("");
+
+const forwardingLogLines = computed(() =>
+  filterWorkerLogLines(
+    botWorkerLog.value?.lines ?? [],
+    selectedBotId.value,
+    selectedSessionId.value,
+  ),
+);
+
+const REFRESH_INTERVAL_MS = 1000;
+
 let systemLogTimer: ReturnType<typeof setInterval> | undefined;
+let traceTimer: ReturnType<typeof setInterval> | undefined;
 let botStatusTimer: ReturnType<typeof setInterval> | undefined;
+
+function botDetailSignature(detail: BotDetail): string {
+  return [
+    detail.status,
+    detail.is_online,
+    detail.can_start,
+    detail.has_runtime,
+    detail.heartbeat_display,
+    detail.sessions.map((session) => `${session.session_id}:${session.status}`).join("|"),
+  ].join(";");
+}
 
 function text(key: Parameters<typeof translate>[1]): string {
   return translate(currentLanguage.value, key);
@@ -126,10 +153,11 @@ async function reloadBotContext(botId: string) {
   if (detail.sessions.length > 0) {
     selectedSessionId.value = detail.sessions[0].session_id;
     historyPage.value = 1;
-    await reloadSessionHistory();
+    await Promise.all([reloadSessionHistory(), refreshWorkerLogs()]);
   } else {
     selectedSessionId.value = "";
     sessionHistory.value = null;
+    await refreshWorkerLogs();
   }
 }
 
@@ -240,30 +268,36 @@ async function saveForwardPolicy() {
   }
 }
 
-async function reloadSessionHistory() {
+async function reloadSessionHistory(silent = false) {
   if (selectedSessionId.value.length === 0) {
     return;
   }
-  historyError.value = "";
-  isHistoryLoading.value = true;
+  if (!silent) {
+    historyError.value = "";
+    isHistoryLoading.value = true;
+  }
   try {
     const history = await fetchSessionHistory(activeToken.value, selectedSessionId.value, historyPage.value, pageSize);
-    sessionHistory.value = history;
+    assignIfChanged(sessionHistory, history, jsonEquals);
   } catch (error) {
-    if (error instanceof Error) {
-      historyError.value = error.message;
-    } else {
-      historyError.value = text("unknownError");
+    if (!silent) {
+      if (error instanceof Error) {
+        historyError.value = error.message;
+      } else {
+        historyError.value = text("unknownError");
+      }
     }
   } finally {
-    isHistoryLoading.value = false;
+    if (!silent) {
+      isHistoryLoading.value = false;
+    }
   }
 }
 
 async function loadSessionHistory(sessionId: string) {
   selectedSessionId.value = sessionId;
   historyPage.value = 1;
-  await reloadSessionHistory();
+  await Promise.all([reloadSessionHistory(), refreshWorkerLogs()]);
 }
 
 async function nextHistoryPage() {
@@ -282,26 +316,74 @@ async function prevHistoryPage() {
   await reloadSessionHistory();
 }
 
-async function refreshSystemLogs() {
-  systemLogError.value = "";
-  isSystemLogLoading.value = true;
+async function refreshSystemLogs(options?: { silent?: boolean; manual?: boolean }) {
+  const silent = options?.silent ?? false;
+  const manual = options?.manual ?? false;
+  if (!silent) {
+    systemLogError.value = "";
+    isSystemLogLoading.value = true;
+  }
   try {
-    const [adminLog, workerLog] = await Promise.all([
-      fetchSystemLog(activeToken.value, "admin", 200),
-      fetchSystemLog(activeToken.value, "worker", 200),
-    ]);
-    systemAdminLog.value = adminLog;
-    systemWorkerLog.value = workerLog;
-    systemLogUpdatedAt.value = `${text("time")}: ${new Date().toLocaleString()}`;
+    const next = await fetchSystemLog(activeToken.value, "admin", 200);
+    const changed = assignIfChanged(systemLog, next, jsonEquals);
+    if (!silent || changed || manual) {
+      systemLogUpdatedAt.value = `${text("time")}: ${new Date().toLocaleString()}`;
+    }
   } catch (error) {
-    if (error instanceof Error) {
-      systemLogError.value = error.message;
-    } else {
-      systemLogError.value = text("unknownError");
+    if (!silent) {
+      if (error instanceof Error) {
+        systemLogError.value = error.message;
+      } else {
+        systemLogError.value = text("unknownError");
+      }
     }
   } finally {
-    isSystemLogLoading.value = false;
+    if (!silent) {
+      isSystemLogLoading.value = false;
+    }
   }
+}
+
+async function refreshWorkerLogs(silent = false) {
+  if (middleMode.value !== "detail" || selectedBotId.value.length === 0) {
+    return;
+  }
+  if (!silent) {
+    workerLogError.value = "";
+    isWorkerLogLoading.value = true;
+  }
+  try {
+    const next = await fetchSystemLog(activeToken.value, "worker", 200);
+    assignIfChanged(botWorkerLog, next, (left, right) => {
+      if (left === null) {
+        return false;
+      }
+      return linesEquals(left.lines, right.lines);
+    });
+  } catch (error) {
+    if (!silent) {
+      if (error instanceof Error) {
+        workerLogError.value = error.message;
+      } else {
+        workerLogError.value = text("unknownError");
+      }
+    }
+  } finally {
+    if (!silent) {
+      isWorkerLogLoading.value = false;
+    }
+  }
+}
+
+async function refreshTraceSnapshot(silent = true) {
+  if (middleMode.value !== "detail" || selectedBotId.value.length === 0) {
+    return;
+  }
+  const tasks: Promise<void>[] = [refreshWorkerLogs(silent)];
+  if (selectedSessionId.value.length > 0) {
+    tasks.push(reloadSessionHistory(silent));
+  }
+  await Promise.all(tasks);
 }
 
 async function refreshSelectedBotStatusRealtime() {
@@ -310,7 +392,16 @@ async function refreshSelectedBotStatusRealtime() {
   }
   try {
     const detail = await fetchBotDetail(activeToken.value, selectedBotId.value);
-    selectedBotDetail.value = detail;
+    const nextSignature = botDetailSignature(detail);
+    const previousSignature = selectedBotDetail.value ? botDetailSignature(selectedBotDetail.value) : "";
+    if (nextSignature !== previousSignature) {
+      selectedBotDetail.value = detail;
+    }
+    if (detail.sessions.length > 0 && selectedSessionId.value.length === 0) {
+      selectedSessionId.value = detail.sessions[0].session_id;
+      historyPage.value = 1;
+      await Promise.all([reloadSessionHistory(), refreshWorkerLogs()]);
+    }
     const selectedSessionStillExists = detail.sessions.some(
       (session) => session.session_id === selectedSessionId.value,
     );
@@ -318,11 +409,12 @@ async function refreshSelectedBotStatusRealtime() {
       if (detail.sessions.length > 0) {
         selectedSessionId.value = detail.sessions[0].session_id;
         historyPage.value = 1;
-        await reloadSessionHistory();
+        await Promise.all([reloadSessionHistory(), refreshWorkerLogs()]);
       } else {
         selectedSessionId.value = "";
         sessionHistory.value = null;
         historyError.value = "";
+        await refreshWorkerLogs();
       }
     }
   } catch {
@@ -332,24 +424,33 @@ async function refreshSelectedBotStatusRealtime() {
 
 function backToOverview() {
   middleMode.value = "overview";
+  botWorkerLog.value = null;
+  workerLogError.value = "";
 }
 
 onMounted(async () => {
   applyDocumentTheme();
   await reloadOverviewAndBots();
-  await refreshSystemLogs();
+  await refreshSystemLogs({ manual: true });
   systemLogTimer = setInterval(() => {
-    void refreshSystemLogs();
-  }, 5000);
+    void refreshSystemLogs({ silent: true });
+  }, REFRESH_INTERVAL_MS);
+  traceTimer = setInterval(() => {
+    void refreshTraceSnapshot(true);
+  }, REFRESH_INTERVAL_MS);
   botStatusTimer = setInterval(() => {
     void refreshSelectedBotStatusRealtime();
-  }, 3000);
+  }, REFRESH_INTERVAL_MS * 3);
 });
 
 onUnmounted(() => {
   if (systemLogTimer) {
     clearInterval(systemLogTimer);
     systemLogTimer = undefined;
+  }
+  if (traceTimer) {
+    clearInterval(traceTimer);
+    traceTimer = undefined;
   }
   if (botStatusTimer) {
     clearInterval(botStatusTimer);
@@ -391,6 +492,14 @@ onUnmounted(() => {
         :bot-detail="selectedBotDetail"
         :selected-policy="selectedPolicy"
         :policy-targets-input="policyTargetsInput"
+        :selected-session-id="selectedSessionId"
+        :session-history="sessionHistory"
+        :history-page="historyPage"
+        :is-history-loading="isHistoryLoading"
+        :history-error="historyError"
+        :forwarding-log-lines="forwardingLogLines"
+        :is-worker-log-loading="isWorkerLogLoading"
+        :worker-log-error="workerLogError"
         :current-language="currentLanguage"
         @back-overview="backToOverview"
         @start-bot="startSelectedBot"
@@ -400,23 +509,18 @@ onUnmounted(() => {
         @policy-targets-input="policyTargetsInput = $event"
         @policy-enabled="selectedPolicy && (selectedPolicy.forwarding_enabled = $event)"
         @select-session="loadSessionHistory"
+        @history-prev="prevHistoryPage"
+        @history-next="nextHistoryPage"
       />
     </main>
 
     <BottomLogsPanel
       :current-language="currentLanguage"
-      :session-history="sessionHistory"
-      :history-page="historyPage"
-      :is-history-loading="isHistoryLoading"
-      :history-error="historyError"
-      :system-admin-log="systemAdminLog"
-      :system-worker-log="systemWorkerLog"
+      :system-log="systemLog"
       :is-system-log-loading="isSystemLogLoading"
       :system-log-error="systemLogError"
       :system-log-updated-at="systemLogUpdatedAt"
-      @history-prev="prevHistoryPage"
-      @history-next="nextHistoryPage"
-      @refresh-system-logs="refreshSystemLogs"
+      @refresh-system-logs="refreshSystemLogs({ manual: true })"
     />
   </div>
 </template>
