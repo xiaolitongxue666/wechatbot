@@ -102,6 +102,7 @@ cd admin/web && npm run dev   # http://127.0.0.1:5174/admin/
 | [architecture.md](architecture.md) | 全仓架构 |
 | [rust/architecture.md](rust/architecture.md) | **Rust 前后端技术栈与模块** |
 | [AGENTS.md](AGENTS.md) | 开发约定（含 Agent） |
+| [admin/pixel-ui-plan.md](admin/pixel-ui-plan.md) | 管理前端像素风 UI 改造计划 |
 | [../reference-sdks/README.md](../reference-sdks/README.md) | 参考 SDK 索引 |
 | [../legacy/README.md](../legacy/README.md) | 归档子项目 |
 
