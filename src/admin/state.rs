@@ -1,5 +1,6 @@
 use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
+use crate::config::SkillsConfig;
 use crate::runtime::MultiBotRuntime;
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ pub struct AdminState {
     pub admin_port: u16,
     pub session_online_timeout_secs: u64,
     pub qr_expire_secs: u64,
+    pub skills_config: SkillsConfig,
 }
 
 impl AdminState {

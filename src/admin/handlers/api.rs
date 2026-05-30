@@ -699,6 +699,39 @@ pub async fn bot_send_json(
     }))
 }
 
+#[derive(Serialize)]
+pub struct SkillsListJson {
+    pub skills_dir: String,
+    pub enabled: bool,
+    pub skills: Vec<SkillsListItem>,
+}
+
+#[derive(Serialize)]
+pub struct SkillsListItem {
+    pub name: String,
+    pub description: String,
+    pub version: String,
+}
+
+pub async fn skills_list_json(
+    State(state): State<AdminState>,
+    headers: HeaderMap,
+) -> Result<Json<SkillsListJson>, Response> {
+    require_permission(&state, &headers, "bot.read", None).await?;
+    let cfg = &state.skills_config;
+    Ok(Json(SkillsListJson {
+        skills_dir: cfg.skills_dir.clone(),
+        enabled: cfg.enabled,
+        skills: vec![
+            SkillsListItem {
+                name: "freshrss".into(),
+                description: "Poll FreshRSS aggregated RSS, dedup, push to WeChat".into(),
+                version: "1.0.0".into(),
+            },
+        ],
+    }))
+}
+
 pub async fn admin_system_logs_json(
     State(state): State<AdminState>,
     headers: HeaderMap,

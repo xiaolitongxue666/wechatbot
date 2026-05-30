@@ -2,12 +2,12 @@ use crate::admin::handlers::{
     admin_system_logs_json, bot_create_json, bot_delete_json, bot_detail_json,
     bot_detail_status_json, bot_list_json, bot_register, bot_send_json, bot_start_json,
     bot_stop_json, forward_policy_get, forward_policy_put, healthz, overview_json,
-    root_redirect, session_history_json, worker_system_logs_json,
+    root_redirect, session_history_json, skills_list_json, worker_system_logs_json,
 };
 use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
 use crate::admin::state::AdminState;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, SkillsConfig};
 use crate::error::Result;
 use crate::runtime::MultiBotRuntime;
 use crate::storage::postgres::PostgresChatRepository;
@@ -33,6 +33,7 @@ pub fn admin_router(pool: PgPool) -> Router {
         8787,
         3600,
         3600,
+        SkillsConfig::default(),
     )
 }
 
@@ -45,6 +46,7 @@ pub fn admin_router_with_runtime(
     admin_port: u16,
     session_online_timeout_secs: u64,
     qr_expire_secs: u64,
+    skills_config: SkillsConfig,
 ) -> Router {
     let state = AdminState {
         repo: AdminRepository::new(pool, session_online_timeout_secs as i64),
@@ -55,6 +57,7 @@ pub fn admin_router_with_runtime(
         admin_port,
         session_online_timeout_secs,
         qr_expire_secs,
+        skills_config,
     };
     let web_admin_dist_dir = web_admin_dist_dir();
     let admin_api = Router::new()
@@ -69,6 +72,7 @@ pub fn admin_router_with_runtime(
             "/bots/{bot_id}/forward-policy",
             get(forward_policy_get).put(forward_policy_put),
         )
+        .route("/skills", get(skills_list_json))
         .route("/sessions/{session_id}/history", get(session_history_json))
         .route("/system-logs/admin", get(admin_system_logs_json))
         .route("/system-logs/worker", get(worker_system_logs_json))
@@ -116,6 +120,7 @@ pub async fn run_admin_server(config: AppConfig) -> Result<()> {
         port,
         config.runtime.session_online_timeout_secs,
         config.runtime.qr_expire_secs,
+        config.skills,
     );
     serve_bind(app, &bind).await
 }

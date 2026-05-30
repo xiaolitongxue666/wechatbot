@@ -1,0 +1,10 @@
+{
+  "name": "freshrss",
+  "description": "Poll FreshRSS aggregated RSS, dedup new articles, push to WeChat",
+  "version": "1.0.0",
+  "config_schema": {
+    "FRESHRSS_RSS_URL": {"type": "string", "required": true, "description": "FreshRSS aggregated RSS URL"},
+    "RSS_CHECK_INTERVAL": {"type": "int", "default": 60, "description": "Poll interval in seconds"}
+  },
+  "env_vars": ["FRESHRSS_RSS_URL", "RSS_CHECK_INTERVAL", "BOT_ADMIN_URL", "BOT_ADMIN_TOKEN", "BOT_ID", "BOT_USER_ID"]
+}

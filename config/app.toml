@@ -34,3 +34,7 @@ session_online_timeout_secs = 3600
 typing_keepalive_secs = 3600
 context_expire_secs = 3600
 typing_trigger_ms = 1000
+
+[skills]
+enabled = false
+skills_dir = "./skills"

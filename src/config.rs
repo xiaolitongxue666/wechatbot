@@ -113,6 +113,27 @@ impl Default for RuntimeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_skills_dir")]
+    pub skills_dir: String,
+}
+
+fn default_skills_dir() -> String {
+    "./skills".into()
+}
+
+impl Default for SkillsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            skills_dir: default_skills_dir(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
@@ -122,6 +143,8 @@ pub struct AppConfig {
     pub admin: AdminConfig,
     #[serde(default)]
     pub runtime: RuntimeConfig,
+    #[serde(default)]
+    pub skills: SkillsConfig,
 }
 
 impl AppConfig {
@@ -313,6 +336,7 @@ mod tests {
             },
             admin: AdminConfig::default(),
             runtime: RuntimeConfig::default(),
+            skills: SkillsConfig::default(),
         }
     }
 
