@@ -655,6 +655,50 @@ async fn read_system_log(path: &PathBuf, max_lines: usize) -> Result<Vec<String>
     }
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct BotSendRequest {
+    user_id: String,
+    text: String,
+}
+
+#[derive(Serialize)]
+pub struct BotSendResponse {
+    bot_id: String,
+    user_id: String,
+    status: String,
+}
+
+pub async fn bot_send_json(
+    State(state): State<AdminState>,
+    headers: HeaderMap,
+    Path(bot_id): Path<String>,
+    Json(payload): Json<BotSendRequest>,
+) -> Result<Json<BotSendResponse>, Response> {
+    require_permission(&state, &headers, "bot.start_stop", Some(&bot_id)).await?;
+
+    let runtime = state
+        .runtime
+        .as_ref()
+        .ok_or_else(|| bad_request("runtime unavailable"))?;
+
+    let reg = runtime.bot_registry.read().await;
+    let bot = reg
+        .get(&bot_id)
+        .ok_or_else(|| bad_request(format!("bot {bot_id} not found in registry")))?
+        .clone();
+    drop(reg);
+
+    bot.send(&payload.user_id, &payload.text)
+        .await
+        .map_err(|e| internal_error(format!("send failed: {e}")))?;
+
+    Ok(Json(BotSendResponse {
+        bot_id,
+        user_id: payload.user_id,
+        status: "accepted".to_string(),
+    }))
+}
+
 pub async fn admin_system_logs_json(
     State(state): State<AdminState>,
     headers: HeaderMap,

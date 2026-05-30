@@ -1,8 +1,8 @@
 use crate::admin::handlers::{
     admin_system_logs_json, bot_create_json, bot_delete_json, bot_detail_json,
-    bot_detail_status_json, bot_list_json, bot_register, bot_start_json, bot_stop_json,
-    forward_policy_get, forward_policy_put, healthz, overview_json, root_redirect,
-    session_history_json, worker_system_logs_json,
+    bot_detail_status_json, bot_list_json, bot_register, bot_send_json, bot_start_json,
+    bot_stop_json, forward_policy_get, forward_policy_put, healthz, overview_json,
+    root_redirect, session_history_json, worker_system_logs_json,
 };
 use crate::admin::qr::QrUrlStore;
 use crate::admin::repository::AdminRepository;
@@ -63,6 +63,7 @@ pub fn admin_router_with_runtime(
         .route("/bots/{bot_id}", get(bot_detail_json).delete(bot_delete_json))
         .route("/bots/{bot_id}/start", post(bot_start_json))
         .route("/bots/{bot_id}/stop", post(bot_stop_json))
+        .route("/bots/{bot_id}/send", post(bot_send_json))
         .route("/bots/{bot_id}/status", get(bot_detail_status_json))
         .route(
             "/bots/{bot_id}/forward-policy",

@@ -51,6 +51,7 @@ credentials.json
 .worker.log
 .e2e-preview.pid
 .e2e-preview.log
+sent_articles.txt
 
 # Local binary artifacts
 *.exe
