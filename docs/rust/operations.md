@@ -25,6 +25,7 @@
 |------|------|
 | 测试 / 演示（**带 mock**） | `bash tools/scripts/start.sh` 或 `start_all.sh` |
 | 部署（**不带 mock**） | `bash tools/scripts/start.sh --deploy` 或 `start_all.sh --deploy` |
+| 一键关闭 | `bash tools/scripts/stop.sh` 或 `stop_all.sh`（`-v`/`--volumes` 删 Docker 卷） |
 | 仅启 admin | `bash tools/scripts/admin.sh start`（不 seed，需已 migrate） |
 | 仅启 worker | `bash tools/scripts/worker.sh start` |
 | 状态检查 | `bash tools/scripts/status.sh` |

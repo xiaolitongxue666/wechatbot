@@ -1,0 +1,35 @@
+:root {
+  /* Typography */
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  --font-mono: Menlo, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 17px;
+  --text-lg: 21px;
+  --text-xl: 24px;
+  --leading-tight: 1.2;
+  --leading-body: 1.43;
+  --leading-caption: 1.29;
+  --tracking-display: -0.01em;
+  --tracking-caption: -0.016em;
+
+  /* Radius — DESIGN.md rounded scale */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
+  --radius-pill: 9999px;
+
+  /* Spacing — 8px base */
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 17px;
+  --space-lg: 24px;
+
+  /* Component sizes */
+  --control-height: 44px;
+  --btn-primary-py: 11px;
+  --btn-primary-px: 22px;
+  --btn-utility-py: 8px;
+  --btn-utility-px: 15px;
+}

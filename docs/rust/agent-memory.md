@@ -78,9 +78,13 @@ cd reference-sdks/nodejs && npx vitest run
 | 场景 | 命令 | 是否 mock |
 |------|------|-----------|
 | 本地测试 / Admin 演示 | `bash tools/scripts/start.sh` | **是**（`db.sh seed`） |
-| 部署 / 生产 | `bash tools/scripts/start.sh --deploy` | **否**（仅 migrate） |
+| 全栈（含 worker） | `bash tools/scripts/start_all.sh` | **是**（默认） |
+| 部署 / 生产 | `bash tools/scripts/start.sh --deploy` 或 `start_all.sh --deploy` | **否**（仅 migrate） |
+| 一键关闭 | `bash tools/scripts/stop.sh` 或 `stop_all.sh`（`-v` 删卷） | — |
 
 **禁止**对生产库执行 `db.sh seed`。`admin.sh start` 本身不灌种，只启动进程。
+
+`start_all.sh` / `start.sh` 启动后**立即退出**；admin、worker、Docker 在后台 detach。Ctrl+C 只能中断前台 bash，不能关停后台服务 → 用 `stop_all.sh` / `stop.sh`。
 
 ### 目录与迁移
 
@@ -124,7 +128,7 @@ cd reference-sdks/nodejs && npx vitest run
 
 | 用途 | 路径 |
 |------|------|
-| 运维脚本 | `tools/scripts/*.sh` |
+| 运维脚本 | `tools/scripts/*.sh`（含 `start_all.sh`/`stop_all.sh`、`start.sh`/`stop.sh`） |
 | 公共库 | `tools/scripts/_common.sh` → `PROJECT_ROOT` |
 | 后端门禁 | `tools/scripts/test/run_backend_tests.sh` |
 | E2E | `tools/scripts/test/run_e2e.sh` |

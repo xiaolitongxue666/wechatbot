@@ -6,7 +6,7 @@ Persistent facts from session history. Covers architecture decisions, integratio
 
 1) Rust 主工程（Cargo.toml 根），微信 iLink Bot SDK + Axum admin server (:8787) + 消息转发流水线
 2) 存储：PostgreSQL（业务+会话+RBAC）、Redis（事件队列+心跳）、MinIO/local（媒体）
-3) 前端：Vue 3 + TypeScript + Vite (admin/web/)，Axum 挂载 admin/web/dist
+3) 前端：Vue 3 + TypeScript + Vite (admin/web/)，设计 token 在 `src/styles/tokens.css`，全局 utility 样式在 `App.vue`
 4) 启动：`cargo run --bin admin`（管理后台+Bot）、`cargo run --bin worker`（转发消费）
 5) 开发依赖：`docker compose -f deploy/docker-compose.dev.yml up -d postgres redis`
 
@@ -39,5 +39,5 @@ Persistent facts from session history. Covers architecture decisions, integratio
 21) 文档根 `docs/`，`docs/rust/agent-memory.md` 是开发者 Agent 记忆入口
 22) `cargo test --lib`（单元测试），`cargo test`（全部需 PG+Redis）
 23) 不要长时间前台运行 `test_all.sh` / Playwright webServer — 易超时卡死
-24) `tools/scripts/dev.sh` 启动开发，`tools/scripts/skill.sh` 管理技能
-25) 变更后重建 admin：`cargo build --bin admin`；启动 admin 后 Bot 需重新扫码登录 + 用户发消息激活
+24) 一键启停：`start_all.sh`/`stop_all.sh`（全栈含 worker）；`start.sh`/`stop.sh`（环境，worker 用 `--with-worker`）；关闭顺序 worker→admin→Docker
+25) `start_all.sh` 为一次性脚本，结束后 admin/worker/容器在后台运行；要停全栈用 `stop_all.sh`，非 Ctrl+C

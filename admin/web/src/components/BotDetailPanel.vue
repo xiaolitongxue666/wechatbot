@@ -264,8 +264,8 @@ function text(key: Parameters<typeof translate>[1]): string {
 
 .status-banner {
   border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
   margin-bottom: 10px;
   background: var(--cell-bg);
 }
@@ -292,20 +292,26 @@ function text(key: Parameters<typeof translate>[1]): string {
 }
 
 .status-caption {
-  font-size: 13px;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
   color: var(--muted-text);
 }
 
 .status-value {
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-tight);
 }
 
 .status-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 13px;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
   color: var(--muted-text);
 }
 
@@ -314,13 +320,21 @@ function text(key: Parameters<typeof translate>[1]): string {
 }
 
 .button.action-active {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--button-active) 55%, transparent);
+  border-color: var(--button-active);
+}
+
+.button.action-active:not(.secondary):not(.danger) {
+  background: color-mix(in srgb, var(--button-primary) 80%, var(--button-active));
+}
+
+.button.secondary.action-active {
+  background: color-mix(in srgb, var(--button-secondary) 70%, var(--button-active));
 }
 
 .inner-card {
   border: 1px solid var(--card-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
   margin-top: 10px;
 }
 
@@ -345,7 +359,7 @@ function text(key: Parameters<typeof translate>[1]): string {
   display: grid;
   place-items: center;
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--cell-bg);
   overflow: hidden;
 }
@@ -365,22 +379,27 @@ function text(key: Parameters<typeof translate>[1]): string {
 
 .flow-hint {
   margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
 }
 
 .trace-refresh-hint {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
 }
 
 .loading-chip {
   align-self: flex-start;
-  font-size: 12px;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
   color: var(--muted-text);
   border: 1px solid var(--card-border);
-  border-radius: 999px;
-  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  padding: 4px 10px;
 }
 
 .message-forward-card .panel-header {
@@ -411,14 +430,14 @@ function text(key: Parameters<typeof translate>[1]): string {
   max-height: 320px;
   overflow: auto;
   border: 1px solid var(--table-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px;
   background: var(--cell-bg);
 }
 
 .log-line {
-  font-family: Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   line-height: 1.45;
   white-space: nowrap;
   overflow: hidden;
@@ -428,15 +447,6 @@ function text(key: Parameters<typeof translate>[1]): string {
 
 .error-text {
   color: var(--error-text);
-}
-
-.button.secondary.active {
-  background: var(--button-active);
-}
-
-h2,
-h3 {
-  margin-top: 0;
 }
 
 @media (max-width: 1200px) {

@@ -79,7 +79,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 36px;
+  min-height: var(--control-height);
   flex-wrap: wrap;
 }
 
@@ -95,11 +95,13 @@ watch(
 }
 
 .auto-refresh-badge {
-  font-size: 12px;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
   color: var(--muted-text);
   border: 1px solid var(--card-border);
-  border-radius: 999px;
-  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  padding: 4px 10px;
   white-space: nowrap;
 }
 
@@ -109,7 +111,9 @@ watch(
 
 .system-log-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-xs);
+  letter-spacing: -0.12px;
+  line-height: 1;
 }
 
 .scroll-area {
@@ -118,7 +122,7 @@ watch(
   flex: 1;
   overflow: auto;
   border: 1px solid var(--table-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px;
   background: var(--cell-bg);
 }
@@ -128,17 +132,17 @@ watch(
   top: 8px;
   right: 10px;
   z-index: 1;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted-text);
   background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 2px 6px;
   pointer-events: none;
 }
 
 .log-line {
-  font-family: Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;

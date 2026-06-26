@@ -209,3 +209,22 @@ apply_db_migrate_and_optional_seed() {
         log_info "Skipping db.sh seed (deploy mode)"
     fi
 }
+
+# 停止 dev 栈：worker → admin → Docker（与 start_all.sh / start.sh 启动顺序相反）
+# 参数: remove_volumes — true 时 services.sh down -v
+stop_dev_stack() {
+    local remove_volumes="${1:-false}"
+
+    log_step "Stopping forwarder worker..."
+    bash "${SCRIPT_DIR}/worker.sh" stop
+
+    log_step "Stopping admin server..."
+    bash "${SCRIPT_DIR}/admin.sh" stop
+
+    log_step "Stopping development services..."
+    if [[ "$remove_volumes" == "true" ]]; then
+        bash "${SCRIPT_DIR}/services.sh" down -v
+    else
+        bash "${SCRIPT_DIR}/services.sh" down
+    fi
+}

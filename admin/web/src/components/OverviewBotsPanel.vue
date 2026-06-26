@@ -76,7 +76,7 @@ function text(key: Parameters<typeof translate>[1]): string {
 .panel-stack {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 16px;
   min-height: 0;
 }
 
@@ -90,9 +90,5 @@ function text(key: Parameters<typeof translate>[1]): string {
   min-height: 0;
   flex: 1;
   overflow: auto;
-}
-
-h2 {
-  margin-top: 0;
 }
 </style>

@@ -105,6 +105,6 @@ function text(key: Parameters<typeof translate>[1]): string {
 .switch-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 </style>
